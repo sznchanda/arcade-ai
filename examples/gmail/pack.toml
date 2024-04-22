@@ -1,0 +1,11 @@
+
+
+[pack]
+name = "example"
+description = "A simple actor that sends an email using the Gmail API."
+version = "0.1.0"
+author = "Sam Partee"
+email = "sam@partee.io"
+
+[modules]
+gmailer = "0.1.0"
