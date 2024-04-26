@@ -24,12 +24,13 @@ def create_endpoint_function(name, description, func, input_model, output_model)
         try:
             # Execute the action
             result = await func(**body.dict())
-            valid_result = output_model(**result)
-            return await response_base.success(data=valid_result.dict())
+            return await response_base.success(data={"result": result})
         except ValidationError as e:
-            return await response_base.fail(res=CustomResponseCode.HTTP_400, msg=str(e))
+            return await response_base.error(res=CustomResponseCode.HTTP_400, msg=str(e))
         except Exception as e:
-            return await response_base.fail(res=CustomResponseCode.HTTP_500, msg=str(e))
+            import traceback
+            print(traceback.format_exc())
+            return await response_base.error(res=CustomResponseCode.HTTP_500, msg=str(e))
 
     run.__name__ = name
     run.__doc__ = description
@@ -37,19 +38,6 @@ def create_endpoint_function(name, description, func, input_model, output_model)
     return run
 
 
-def create_response_model(name: str, output_model: Type[BaseModel]) -> Type[ResponseModel]:
-    """
-    Create a response model for the given schema.
-    """
-    # Create a new response model
-    response_model = create_model(
-        f"{name}Response",
-        code=(int, CustomResponseCode.HTTP_200.code),
-        msg=(str, CustomResponseCode.HTTP_200.msg),
-        data=(output_model, None)
-    )
-
-    return response_model
 
 def generate_endpoint(schemas: List[ToolSchema]) -> APIRouter:
     routers = []
@@ -68,15 +56,15 @@ def generate_endpoint(schemas: List[ToolSchema]) -> APIRouter:
             output_model=schema.output_model
         )
 
-        response_model = create_response_model(schema.name, schema.output_model)
-
         # Add the endpoint to the FastAPI app
         router.post(
             f"/{schema.name}",
             name=schema.name,
             summary=schema.description,
             tags=[schema.meta.module],
-            response_model=response_model,
+            response_model=schema.output_model,
+            response_model_exclude_unset=True,
+            response_model_exclude_none=True,
             response_description=create_output_description(schema.output_model)
             )(run)
 
@@ -98,6 +86,6 @@ def create_output_description(output_model: Type[BaseModel]) -> str:
     output_description += "\n\n**Attributes:**\n\n"
 
     for name, field in output_model.model_fields.items():
-        output_description += f"- **{name}** ({field.annotation.__name__}): {field.description}\n"
+        output_description += f"- **{name}** ({field.annotation.__name__})\n"
 
     return output_description

@@ -2,5 +2,5 @@
 from .tool import (
     Param,
     tool,
-    Secret
+    get_secret
 )

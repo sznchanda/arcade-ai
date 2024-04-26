@@ -1,10 +1,11 @@
 import uvicorn
 
 from pathlib import Path
-
+import asyncio
 from toolserve.common.log import log
 from toolserve.server.core.conf import settings
 from toolserve.server.core.registrar import register_app
+
 
 app = register_app()
 

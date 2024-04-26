@@ -6,6 +6,7 @@ import inspect
 from datetime import datetime
 from typing import List, Optional, Type, Dict, Annotated, Any, Callable, Tuple
 from pathlib import Path
+import asyncio
 
 from fastapi import APIRouter
 from pydantic import BaseModel, ValidationError, Field, create_model
@@ -15,7 +16,8 @@ from toolserve.server.core.conf import settings
 from toolserve.common.response_code import CustomResponseCode
 from toolserve.common.response import ResponseModel, response_base
 from toolserve.apm.base import ToolPack
-from toolserve.sdk import Param, Secret
+from toolserve.sdk import Param
+from toolserve.utils import snake_to_camel
 
 class ToolMeta(BaseModel):
     module: str
@@ -47,6 +49,7 @@ class ToolCatalog:
 
         tools = {}
         for name, tool_spec in toolpack.tools.items():
+            print(name, tool_spec)
             module_name, versioned_tool = tool_spec.split('.', 1)
             func_name, version = versioned_tool.split('@')
 
@@ -57,14 +60,16 @@ class ToolCatalog:
                 module=module_name,
                 path=module.__file__
             )
-            input_model, output_model = create_pydantic_models_for_ds_tool(tool)
+
+            input_model, output_model = create_func_models(tool)
+            response_model = create_response_model(name, output_model)
             tool_schema = ToolSchema(
                 name=name,
                 description=tool.__doc__,
                 version=version,
                 tool=tool,
                 input_model=input_model,
-                output_model=output_model,
+                output_model=response_model,
                 meta=tool_meta
             )
             tools[name] = tool_schema
@@ -87,43 +92,91 @@ class ToolCatalog:
     def list_tools(self) -> List[Dict[str, str]]:
         return [{'name': t.name, 'description': t.description} for t in self.tools]
 
-# ActionCatalog class
-def create_pydantic_models_for_ds_tool(func: Callable) -> Tuple[Type[BaseModel], Type[BaseModel]]:
-    """
-    Dynamically create Pydantic models for the input and output of a function decorated with "@ds.tool".
 
-    Parameters:
-    - func: The function to analyze and create models for.
+
+
+
+def create_func_models(func: Callable) -> Tuple[Type[BaseModel], Type[BaseModel]]:
+    """
+    Analyze a function to create corresponding Pydantic models for its input and output.
+
+    Args:
+        func (Callable): The function to analyze.
 
     Returns:
-    - A tuple containing the original function, the input Pydantic model, and the output Pydantic model.
+        Tuple[Type[BaseModel], Type[BaseModel]]: A tuple containing the input and output Pydantic models.
     """
-    # Extract the function signature
-    sig = inspect.signature(func)
     input_fields = {}
-    for name, param in sig.parameters.items():
-        # Determine the type of parameter, handling special types like Param and Secret
-        annotation = param.annotation
-        if hasattr(annotation, '__origin__') and annotation.__origin__ in [Param, Secret]:
-            # Extract the inner type and description from Param/Secret
-            field_type = annotation.__args__[0]
-            description = annotation.__metadata__[0] if annotation.__metadata__ else ""
-            default = param.default if param.default is not inspect.Parameter.empty else ...
-            input_fields[name] = (field_type, default, description)
-        else:
-            input_fields[name] = (param.annotation, param.default)
+    if asyncio.iscoroutinefunction(func):
+        func = func.__wrapped__
+    for name, param in inspect.signature(func, follow_wrapped=True).parameters.items():
+        field_info = extract_field_info(param)
+        input_fields[name] = (field_info['type'], Field(**field_info['field_params']))
 
-    # Create the input model dynamically
-    input_model = create_model(f"{func.__name__}Input", **input_fields)
+    input_model = create_model(f"{snake_to_camel(func.__name__)}Input", **input_fields)
 
-    # Dynamically create the output model, handling complex return types with appropriate annotations
-    output_fields = {}
-    return_annotation = sig.return_annotation
-    if not return_annotation is inspect.Signature.empty:
-        if hasattr(return_annotation, '__args__'):  # Check if it's a generic type (e.g., List[int])
-            output_fields = {'result': (return_annotation.__args__[0], ...)}
-        else:
-            output_fields = {'result': (return_annotation, ...)}
-    output_model = create_model(f"{func.__name__}Output", **output_fields)
+    output_model = determine_output_model(func)
+
     return input_model, output_model
 
+def extract_field_info(param: inspect.Parameter) -> dict:
+    """
+    Extract type and field parameters from a function parameter.
+
+    Args:
+        param (inspect.Parameter): The parameter to extract information from.
+
+    Returns:
+        dict: A dictionary with 'type' and 'field_params'.
+    """
+    annotation = param.annotation
+    default = param.default if param.default is not inspect.Parameter.empty else None
+    description = getattr(annotation, '__metadata__', [None])[0] if hasattr(annotation, '__metadata__') else None
+
+    field_params = {
+        'default': default,
+        'description': str(description) if description else "No description provided."
+    }
+
+    # Handle specific annotations like Param and Secret if needed
+    if hasattr(annotation, '__origin__') and annotation.__origin__ in [Param]:
+        field_type = annotation.__args__[0]
+    else:
+        field_type = annotation
+
+    return {'type': field_type, 'field_params': field_params}
+
+def determine_output_model(func: Callable) -> Type[BaseModel]:
+    """
+    Determine the output model for a function based on its return annotation.
+
+    Args:
+        func (Callable): The function to analyze.
+
+    Returns:
+        Type[BaseModel]: A Pydantic model representing the output.
+    """
+    return_annotation = inspect.signature(func).return_annotation
+    if return_annotation is inspect.Signature.empty:
+        return create_model(f"{snake_to_camel(func.__name__)}Output")
+    elif hasattr(return_annotation, '__origin__'):
+        field_type = Optional[return_annotation.__args__[0]]
+        description = return_annotation.__metadata__[0] if return_annotation.__metadata__ else ""
+        if description:
+            return create_model(f"{snake_to_camel(func.__name__)}Output", result=(field_type, Field(description=str(description))))
+        else:
+            return create_model(f"{snake_to_camel(func.__name__)}Output", result=(return_annotation, Field(description="No description provided.")))
+
+def create_response_model(name: str, output_model: Type[BaseModel]) -> Type[ResponseModel]:
+    """
+    Create a response model for the given schema.
+    """
+    # Create a new response model
+    response_model = create_model(
+        f"{name}Response",
+        code=(int, CustomResponseCode.HTTP_200.code),
+        msg=(str, CustomResponseCode.HTTP_200.msg),
+        data=(Optional[output_model], None)
+    )
+
+    return response_model

@@ -56,7 +56,7 @@ class ResponseBase:
     """
 
     @staticmethod
-    async def __response(*, res: CustomResponseCode | CustomResponse = None, data: Any | None = None) -> ResponseModel:
+    async def __response(*, res: CustomResponseCode | CustomResponse = None, msg: str | None = None, data: Any | None = None) -> ResponseModel:
         """
         General method for successful response
 
@@ -64,7 +64,8 @@ class ResponseBase:
         :param data: Response data
         :return:
         """
-        return ResponseModel(code=res.code, msg=res.msg, data=data)
+        msg = msg if msg else res.msg
+        return ResponseModel(code=res.code, msg=msg, data=data)
 
     async def success(
         self,
@@ -81,6 +82,15 @@ class ResponseBase:
         data: Any = None,
     ) -> ResponseModel:
         return await self.__response(res=res, data=data)
+
+    async def error(
+        self,
+        *,
+        res: CustomResponseCode | CustomResponse = CustomResponseCode.HTTP_400,
+        msg: str = CustomResponseCode.HTTP_400.msg,
+        data: Any = None,
+    ) -> ResponseModel:
+        return await self.__response(res=res, msg=msg, data=data)
 
 
 response_base = ResponseBase()
