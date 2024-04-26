@@ -6,9 +6,9 @@ from pydantic import ValidationError
 
 from toolserve.server.core.conf import settings
 from toolserve.server.core.depends import get_catalog
-from toolserve.common.response_code import CustomResponseCode
-from toolserve.common.response import ResponseModel, response_base
-#from toolserve.utils.openai_tool import schema_to_openai_tool
+from toolserve.server.common.response_code import CustomResponseCode
+from toolserve.server.common.response import ResponseModel, response_base
+from toolserve.utils.openai_tool import schema_to_openai_tool
 
 router = APIRouter()
 
@@ -17,25 +17,25 @@ router = APIRouter()
     summary='List available tools',
 )
 async def list_tools(catalog=Depends(get_catalog)) -> ResponseModel:
-    """List all available actions"""
+    """List all available tools"""
 
     tools = catalog.list_tools()
     return await response_base.success(data=tools)
 
 @router.get(
     '/oai_function',
-    summary="Get the OpenAI function format of an action"
+    summary="Get the OpenAI function format of an tool"
 )
 async def get_oai_function(
-    action_name: str = Query(..., title="Action Name", description="The name of the action"),
+    tool_name: str = Query(..., title="Tool Name", description="The name of the tool"),
     catalog=Depends(get_catalog)
 ) -> ResponseModel:
-    """Get the OpenAI function format of an action"""
+    """Get the OpenAI function format of an tool"""
 
     try:
         # TODO handle keyerror
-        action = catalog[action_name]
-        json_data = schema_to_openai_tool(action)
+        tool = catalog[tool_name]
+        json_data = schema_to_openai_tool(tool)
 
         return await response_base.success(data=json_data)
     except ValidationError as e:

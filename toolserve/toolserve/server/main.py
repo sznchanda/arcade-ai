@@ -2,7 +2,7 @@ import uvicorn
 
 from pathlib import Path
 import asyncio
-from toolserve.common.log import log
+from toolserve.server.common.log import log
 from toolserve.server.core.conf import settings
 from toolserve.server.core.registrar import register_app
 
@@ -12,7 +12,7 @@ app = register_app()
 if __name__ == '__main__':
     try:
         log.info(
-            "Darkstar Toolserve is starting..."
+            "Arcade AI Toolserve is starting..."
         )
         uvicorn.run(
             app=f'{Path(__file__).stem}:app',

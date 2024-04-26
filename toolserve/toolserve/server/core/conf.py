@@ -14,8 +14,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env')
 
-    WORK_DIR: Path = Path.home() / '.darkstar'
+    WORK_DIR: Path = Path.home() / '.arcade'
     TOOLS_DIR: Path = os.getcwd()
+    ARTIFACTS_DIR: Path = WORK_DIR / 'artifacts'
+    DATA_DIR: Path = WORK_DIR / 'data'
+
+    BUILTIN_TOOLS_DIR: Path = Path(__file__).parent.parent.parent / 'builtin' / 'default'
+    BUILTIN_TOOLS: list[str] = [
+        "query.list_data_sources@builtin",
+        "query.get_data_schema@builtin",
+        "query.query_sql@builtin",
+    ]
 
     # Env Config
     ENVIRONMENT: Literal['dev', 'pro'] = 'dev'
@@ -34,10 +43,10 @@ class Settings(BaseSettings):
 
     # FastAPI
     API_V1_STR: str = '/api/v1'
-    API_ACTION_STR: str = '/action'
-    TITLE: str = 'Darkstar Toolserver'
+    API_ACTION_STR: str = '/tool'
+    TITLE: str = 'Arcade AI Toolserver'
     VERSION: str = '0.1.0'
-    DESCRIPTION: str = 'Darkstar Toolserver API'
+    DESCRIPTION: str = 'Arcade AI Toolserver API'
     DOCS_URL: str | None = f'{API_V1_STR}/docs'
     REDOCS_URL: str | None = f'{API_V1_STR}/redocs'
     OPENAPI_URL: str | None = f'{API_V1_STR}/openapi'
@@ -88,7 +97,15 @@ class Settings(BaseSettings):
     TOKEN_SECRET_KEY: str = "secret"
     OPERA_LOG_ENCRYPT_SECRET_KEY: str = "secret"
 
+    # SQL Database
+    DB_HOST: str = "localhost"
+    DB_PORT: int = "3306"
+    DB_USER: str = "arcade"
+    DB_PASSWORD: str = "arcade"
 
+    DB_ECHO: bool = False
+    DB_DATABASE: str = 'arcade'
+    DB_CHARSET: str = 'utf8mb4'
 
 @lru_cache
 def get_settings():

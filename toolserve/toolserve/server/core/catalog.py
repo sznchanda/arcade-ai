@@ -13,8 +13,8 @@ from pydantic import BaseModel, ValidationError, Field, create_model
 from importlib import import_module
 
 from toolserve.server.core.conf import settings
-from toolserve.common.response_code import CustomResponseCode
-from toolserve.common.response import ResponseModel, response_base
+from toolserve.server.common.response_code import CustomResponseCode
+from toolserve.server.common.response import ResponseModel, response_base
 from toolserve.apm.base import ToolPack
 from toolserve.sdk import Param
 from toolserve.utils import snake_to_camel
@@ -41,6 +41,7 @@ class ToolSchema(BaseModel):
 class ToolCatalog:
     def __init__(self, tools_dir: str = settings.TOOLS_DIR):
         self.tools = self.read_tools(tools_dir)
+        self.tools.update(self.__get_builitin_tools())
 
     @staticmethod
     def read_tools(directory: str) -> List[ToolSchema]:
@@ -76,10 +77,39 @@ class ToolCatalog:
 
         return tools
 
+    def __get_builitin_tools(self) -> Dict[str, ToolSchema]:
+        tools = {}
+        sys.path.append(str(settings.BUILTIN_TOOLS_DIR))
+
+        for tool_spec in settings.BUILTIN_TOOLS:
+            print(tool_spec)
+
+            module_name, versioned_tool = tool_spec.split('.', 1)
+            func_name, version = versioned_tool.split('@')
+
+            module = import_module(module_name)
+            tool = getattr(module, func_name)
+
+            input_model, output_model = create_func_models(tool)
+            response_model = create_response_model(func_name, output_model)
+            tool_schema = ToolSchema(
+                name=func_name,
+                description=tool.__doc__,
+                version='builtin',
+                tool=tool,
+                input_model=input_model,
+                output_model=response_model,
+                meta=ToolMeta(module=module_name, path=module.__file__)
+            )
+            tools[func_name] = tool_schema
+
+        return tools
+
+
     def __getitem__(self, name: str) -> Optional[ToolSchema]:
         #TODO error handling
-        for tool in self.tools:
-            if tool.name == name:
+        for tool_name, tool in self.tools.items():
+            if tool_name == name:
                 return tool
         return None
 
@@ -90,7 +120,7 @@ class ToolCatalog:
         return None
 
     def list_tools(self) -> List[Dict[str, str]]:
-        return [{'name': t.name, 'description': t.description} for t in self.tools]
+        return [{'name': t.name, 'description': t.description} for t in self.tools.values()]
 
 
 
@@ -160,10 +190,11 @@ def determine_output_model(func: Callable) -> Type[BaseModel]:
     if return_annotation is inspect.Signature.empty:
         return create_model(f"{snake_to_camel(func.__name__)}Output")
     elif hasattr(return_annotation, '__origin__'):
-        field_type = Optional[return_annotation.__args__[0]]
-        description = return_annotation.__metadata__[0] if return_annotation.__metadata__ else ""
-        if description:
-            return create_model(f"{snake_to_camel(func.__name__)}Output", result=(field_type, Field(description=str(description))))
+        if hasattr(return_annotation, '__metadata__'):
+            field_type = Optional[return_annotation.__args__[0]]
+            description = return_annotation.__metadata__[0] if return_annotation.__metadata__ else ""
+            if description:
+                return create_model(f"{snake_to_camel(func.__name__)}Output", result=(field_type, Field(description=str(description))))
         else:
             return create_model(f"{snake_to_camel(func.__name__)}Output", result=(return_annotation, Field(description="No description provided.")))
 
@@ -173,7 +204,7 @@ def create_response_model(name: str, output_model: Type[BaseModel]) -> Type[Resp
     """
     # Create a new response model
     response_model = create_model(
-        f"{name}Response",
+        f"{snake_to_camel(name)}Response",
         code=(int, CustomResponseCode.HTTP_200.code),
         msg=(str, CustomResponseCode.HTTP_200.msg),
         data=(Optional[output_model], None)

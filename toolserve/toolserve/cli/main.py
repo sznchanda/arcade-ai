@@ -6,7 +6,6 @@ from pathlib import Path
 from rich.console import Console
 from rich.markup import escape
 
-from toolserve.common.log import log
 from toolserve.server.core.conf import settings
 from toolserve.server.main import app
 from toolserve.apm.pack import Packer

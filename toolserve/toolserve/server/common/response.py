@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from toolserve.common.response_code import CustomResponse, CustomResponseCode
+from toolserve.server.common.response_code import CustomResponse, CustomResponseCode
 from toolserve.server.core.conf import settings
 
 _ExcludeData = set[int | str] | dict[int | str, Any]

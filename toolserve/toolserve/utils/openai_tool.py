@@ -1,11 +1,8 @@
 import json
-from typing import Any, Dict, Type, Union, List
-from pydantic import BaseModel, Field
-from datetime import datetime
+from typing import Any, Dict, Type
+from pydantic import BaseModel
 
-from toolserve.server.core.catalog import ParameterSchema
-
-# TODO clean this up
+from toolserve.server.core.catalog import ToolSchema
 
 PYTHON_TO_JSON_TYPES = {
     str: "string",
@@ -26,55 +23,47 @@ def python_type_to_json_type(python_type: Type) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: A dictionary representing the JSON schema for the given Python type.
     """
-    if hasattr(python_type, '__origin__'):  # For generic types like List[str] or Dict[str, int]
+    if hasattr(python_type, '__origin__'):
         origin = python_type.__origin__
         if origin is list:
             item_type = python_type_to_json_type(python_type.__args__[0])
-            return {'type': 'array', 'items': {'type': item_type}}
+            return {'type': 'array', 'items': item_type}
         elif origin is dict:
-            # Handle dictionary with specific key and value types
             key_type = python_type_to_json_type(python_type.__args__[0])
             value_type = python_type_to_json_type(python_type.__args__[1])
-            return {'type': 'object', 'additionalProperties': {'type': value_type}}
-    #elif issubclass(python_type, BaseModel):  # For Pydantic models
-    #    return model_to_json_schema(python_type)
+            return {'type': 'object', 'additionalProperties': value_type}
     return PYTHON_TO_JSON_TYPES.get(python_type, "string")
 
-def parameter_schema_to_json(parameter_schema: 'ParameterSchema') -> Dict[str, Any]:
-    """Convert a ParameterSchema to a JSON schema property."""
-    property_schema = {
-        "type": python_type_to_json_type(parameter_schema.dtype),
-        "description": parameter_schema.description,
-    }
-    if parameter_schema.default is not None:
-        property_schema["default"] = parameter_schema.default
-    return property_schema
-
 def model_to_json_schema(model: Type[BaseModel]) -> Dict[str, Any]:
-    """Convert a Pydantic model to a JSON schema."""
+    """
+    Convert a Pydantic model to a JSON schema.
+
+    Args:
+        model (Type[BaseModel]): The Pydantic model to convert.
+
+    Returns:
+        Dict[str, Any]: A dictionary representing the JSON schema for the given model.
+    """
     properties = {}
     required = []
     for field_name, model_field in model.model_fields.items():
-        field_schema = parameter_schema_to_json(
-            ParameterSchema(
-                name=field_name,
-                dtype=model_field.annotation,
-                description=model_field.description or "",
-                default=model_field.default,
-                required=model_field.required
-            )
-        )
-        properties[field_name] = field_schema
+        field_schema = {
+            "type": python_type_to_json_type(model_field.annotation),
+            "description": model_field.description or "",
+        }
+        if model_field.default is not None:
+            field_schema["default"] = model_field.default
         if model_field.is_required():
             required.append(field_name)
+        properties[field_name] = field_schema
     return {
         "type": "object",
         "properties": properties,
         "required": required,
     }
 
-def schema_to_openai_tool(action_schema: 'ActionSchema') -> str:
-    """Convert an ActionSchema object to a JSON schema string in the specified function format.
+def schema_to_openai_tool(tool_schema: 'ToolSchema') -> str:
+    """Convert an ToolSchema object to a JSON schema string in the specified function format.
 
     Example output format:
     {
@@ -100,30 +89,18 @@ def schema_to_openai_tool(action_schema: 'ActionSchema') -> str:
     }
 
     Args:
-        action_schema (ActionSchema): The action schema to convert.
+        tool_schema (ToolSchema): The tool schema to convert.
 
     Returns:
-        str: A JSON schema string representing the action in the specified format.
+        str: A JSON schema string representing the tool in the specified format.
     """
-    properties = {}
-    required = []
-    if action_schema.in_schema:
-        for input_param in action_schema.in_schema.inputs:
-            param_schema = parameter_schema_to_json(input_param)
-            properties[input_param.name] = param_schema
-            if input_param.required:
-                required.append(input_param.name)
-
+    input_model_schema = model_to_json_schema(tool_schema.input_model)
     function_schema = {
         "type": "function",
         "function": {
-            "name": action_schema.name,
-            "description": action_schema.description,
-            "parameters": {
-                "type": "object",
-                "properties": properties,
-                "required": required,
-            }
+            "name": tool_schema.name,
+            "description": tool_schema.description,
+            "parameters": input_model_schema,
         }
     }
     return json.dumps(function_schema, indent=2)

@@ -5,8 +5,22 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 
 from toolserve.server.routes import v1
+from toolserve.server.database.db_sqlite import create_table
 from toolserve.server.core.conf import settings
-from toolserve.common.serializers import MsgSpecJSONResponse
+from toolserve.server.common.serializers import MsgSpecJSONResponse
+
+
+@asynccontextmanager
+async def register_init(app: FastAPI):
+    """
+
+    :return:
+    """
+    # create database tables
+    await create_table()
+
+    yield
+
 
 def register_app():
     # FastAPI
@@ -18,6 +32,7 @@ def register_app():
         redoc_url=settings.REDOCS_URL,
         openapi_url=settings.OPENAPI_URL,
         default_response_class=MsgSpecJSONResponse,
+        lifespan=register_init,
     )
 
     register_static_file(app)
