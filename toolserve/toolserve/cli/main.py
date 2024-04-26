@@ -7,8 +7,6 @@ from rich.console import Console
 from rich.markup import escape
 
 from toolserve.server.core.conf import settings
-from toolserve.server.main import app
-from toolserve.apm.pack import Packer
 
 
 cli = typer.Typer()
@@ -31,6 +29,8 @@ def serve(
     Starts the server with host, port, and reload options. Uses
     Uvicorn as ASGI server. Parameters allow runtime configuration.
     """
+    from toolserve.server.main import app
+
     try:
         uvicorn.run(
             app=app,
@@ -56,6 +56,8 @@ def pack(
     """
     Creates a new tool pack with the given name, description, and result type.
     """
+    from toolserve.apm.pack import Packer
+
     try:
         pack = Packer(directory)
         pack.create_pack()
