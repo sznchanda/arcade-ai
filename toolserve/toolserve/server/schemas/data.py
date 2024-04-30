@@ -43,4 +43,4 @@ class GetDataDetails(DataSchemaBase):
     file_path: str = Field(..., title="File Path", description="Path of the file")
 
     created_time: datetime = Field(..., title="Creation Time", description="Time when the Data entry was created")
-    updated_time: datetime | None = Field(default=None, title="Updated Time", description="Time when the Data entry was last updated")
+    updated_time: datetime | None = Field(default=datetime.now(), title="Updated Time", description="Time when the Data entry was last updated")

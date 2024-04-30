@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union, List
 import io
 
 from toolserve.sdk.client import list_data, log
@@ -15,11 +15,16 @@ async def list_data_sources() -> Dict[str, Dict[str, str]]:
         Dict[str, str]: A dictionary mapping data source IDs to their details.
     """
     data = await list_data()
-    return {str(item["id"]): {
-        "file_name": item["file_name"],
-        "created_at": item["created_time"],
-        "updated_at": item["updated_time"]
-    } for item in data}
+    partial = {}
+    for item in data:
+        details = {
+            "file_name": item["file_name"],
+            "created_at": item["created_time"]
+        }
+        if "updated_time" in item and item["updated_time"] is not None:
+            details["updated_at"] = item["updated_time"]
+        partial[str(item["id"])] = details
+    return partial
 
 @tool
 async def get_data_schema(
@@ -35,19 +40,21 @@ async def get_data_schema(
     """
     # TODO read in only a few lines
     df = await get_df(data_id)
-    return get_df_info(df)
+    return get_df_info(df)["schema"]
 
 
 @tool
 async def query_sql(
     data_id: Param(int, "id of the data source"),
     sql: Param(str, "parameterized SQL query to execute"),
-    params: Param(Optional[Dict[str, Any]], "parameters to pass to the SQL query") = None,
-    ) -> Param(str, "schema of the data source after executing the query"):
+    params: Param(Optional[List[Union[str, int]]], "parameters to pass to the SQL query") = None,
+    ) -> Dict[str, Union[int, str]]:
     """Query a data source using SQL
 
-    The SQL query should be parameterized with Python's named parameter syntax,
-    e.g. `SELECT * FROM table WHERE column = :value`.
+    The SQL query should be parameterized with DuckDB's syntax. For example, to query a
+    DataFrame named `df` with a parameter `param`, the query should be `SELECT * FROM df WHERE column = ?`.
+
+    The list of params should be in order of the parameters in the SQL query.
 
     After the query, a new data source at a new id will be created with the results and
     the schema of the data source will be returned.
@@ -83,7 +90,7 @@ async def query_sql(
         raise RuntimeError(f"Query execution failed: {str(e)}")
 
 
-def get_df_info(df: pd.DataFrame, data_id: Optional[int]=None) -> str:
+def get_df_info(df: pd.DataFrame, data_id: Optional[int]=None) -> Dict[str, Union[int, str]]:
     """
     Generate a compact string representation of a DataFrame including the count of columns,
     rows, overall size, and details for each column such as name and datatype.
@@ -92,7 +99,7 @@ def get_df_info(df: pd.DataFrame, data_id: Optional[int]=None) -> str:
     df (pd.DataFrame): The Pandas DataFrame to describe.
 
     Returns:
-    str: A string that contains the compact representation of the DataFrame.
+    Dict[str, Union[int, str]]: A dictionary containing the DataFrame details and data_id
     """
 
     # Create an output stream to collect strings
@@ -112,8 +119,19 @@ def get_df_info(df: pd.DataFrame, data_id: Optional[int]=None) -> str:
         output.write(f"Column: {column}\n")
         output.write(f"type: {df[column].dtype}\n")
 
+    # put top 5 rows in the output if there are more than 5 rows.
+    if len(df.index) > 5:
+        output.write("---\n")
+        output.write("Top 5 rows:\n")
+        output.write(df.head().to_string())
+
     # Get the complete string from the output stream
     result = output.getvalue()
     output.close()
 
-    return result
+    info = {
+        "schema": result
+    }
+    if data_id:
+        info["data_id"] = data_id
+    return info
