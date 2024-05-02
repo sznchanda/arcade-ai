@@ -1,6 +1,9 @@
 import json
 from typing import Any, Dict, Type
 from pydantic import BaseModel
+from pydantic_core import PydanticUndefined
+from enum import Enum
+
 
 from toolserve.server.core.catalog import ToolSchema
 
@@ -25,13 +28,18 @@ def python_type_to_json_type(python_type: Type) -> Dict[str, Any]:
     """
     if hasattr(python_type, '__origin__'):
         origin = python_type.__origin__
+
+
         if origin is list:
             item_type = python_type_to_json_type(python_type.__args__[0])
             return {'type': 'array', 'items': item_type}
         elif origin is dict:
-            key_type = python_type_to_json_type(python_type.__args__[0])
             value_type = python_type_to_json_type(python_type.__args__[1])
             return {'type': 'object', 'additionalProperties': value_type}
+
+    elif issubclass(python_type, BaseModel):
+        return model_to_json_schema(python_type)
+
     return PYTHON_TO_JSON_TYPES.get(python_type, "string")
 
 def model_to_json_schema(model: Type[BaseModel]) -> Dict[str, Any]:
@@ -47,12 +55,19 @@ def model_to_json_schema(model: Type[BaseModel]) -> Dict[str, Any]:
     properties = {}
     required = []
     for field_name, model_field in model.model_fields.items():
-        field_schema = {
-            "type": python_type_to_json_type(model_field.annotation),
-            "description": model_field.description or "",
-        }
-        if model_field.default is not None:
-            field_schema["default"] = model_field.default
+        type_json = python_type_to_json_type(model_field.annotation)
+        if isinstance(type_json, dict):
+            field_schema = type_json
+        else:
+            field_schema = {
+                "type": type_json,
+                "description": model_field.description or "",
+            }
+        if model_field.default not in [None, PydanticUndefined]:
+            if isinstance(model_field.default, Enum):
+                field_schema["default"] = model_field.default.value
+            else:
+                field_schema["default"] = model_field.default
         if model_field.is_required():
             required.append(field_name)
         properties[field_name] = field_schema

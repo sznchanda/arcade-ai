@@ -10,3 +10,5 @@ email = "sam@partee.io"
 [tools]
 SendEmail = "gmailer.send_email@0.1.0"
 ReadEmail = "gmailer.read_email@0.1.0"
+PlotDataframe = "gmailer.plot_dataframe@0.1.0"
+Summarize = "chat.summarize@0.1.0"

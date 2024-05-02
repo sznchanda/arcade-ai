@@ -76,7 +76,7 @@ def get_tools_from_file(filepath: str) -> List[str]:
     tree = load_ast_tree(filepath)
     tools = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             tool_name = get_function_name_if_decorated(node)
             if tool_name:
                 tools.append(tool_name)

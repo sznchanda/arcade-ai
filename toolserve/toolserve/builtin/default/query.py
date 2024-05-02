@@ -47,6 +47,7 @@ async def get_data_schema(
 async def query_sql(
     data_id: Param(int, "id of the data source"),
     sql: Param(str, "parameterized SQL query to execute"),
+    output_name: Param(str, "name of the output data to save"),
     params: Param(Optional[List[Union[str, int]]], "parameters to pass to the SQL query") = None,
     ) -> Dict[str, Union[int, str]]:
     """Query a data source using SQL
@@ -62,6 +63,7 @@ async def query_sql(
     Args:
         data_id (int): The id of the data source to query.
         sql (str): The parameterized SQL query to execute.
+        output_name (str): The name of the output data to save.
         params (Optional[Dict[str, Any]]): Parameters to pass to the SQL query.
 
     Returns:
@@ -79,7 +81,7 @@ async def query_sql(
             result_df = con.execute(sql).fetchdf()
 
         # Save the resulting DataFrame and create a new data source
-        result = await save_df(result_df, f"query_result_{data_id}")
+        result = await save_df(result_df, output_name)
         result_id = result["id"]
         # Retrieve and return the schema of the new data source
         return get_df_info(result_df, data_id=result_id)

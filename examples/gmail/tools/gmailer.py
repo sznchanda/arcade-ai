@@ -7,13 +7,16 @@ import email
 from email.header import decode_header
 from pydantic import BaseModel
 import pandas as pd
-
+import plotly.express as px
+from bs4 import BeautifulSoup
+import re
 
 from toolserve.sdk import Param, tool, get_secret
+from toolserve.sdk.dataframe import get_df, save_df
 
 
 @tool
-def send_email(
+async def send_email(
     sender_email: Param(str, "Email address of the sender"),
     recipient_email: Param(str, "Email address of the recipient"),
     subject: Param(str, "Subject of the email"),
@@ -44,12 +47,13 @@ def send_email(
 
 
 @tool
-def read_email(
-    email_address: Param(str, "Email address of the recipient"),
+async def read_email(
+    output_name: Param(str, "Name of the output data"),
     n_emails: Param(int, "Number of emails to read") = 5,
-    ) -> Param(str, "JSON dataframe of List of emails"):
-    """Read emails from a Gmail account"""
+    ):
+    """Read emails from a Gmail account and extract plain text content, removing any HTML."""
 
+    email_address = get_secret("gmail_email")
     password = get_secret("gmail_password")
     server = get_secret("gmail_stmp_server", "smtp.gmail.com")
     port = get_secret("gmail_smtp_port", 587)
@@ -73,23 +77,82 @@ def read_email(
         email_details = {
             "from": msg["From"],
             "to": msg["To"],
-            #"subject": decode_header(msg["Subject"])[0][0],
             "date": msg["Date"]
         }
 
         if msg.is_multipart():
             for part in msg.walk():
                 if part.get_content_type() == "text/plain":
-                    email_details["body"] = part.get_payload(decode=True)
+                    body = part.get_payload(decode=True).decode('utf-8')
+                    email_details["body"] = clean_email_body(body)
         else:
-            email_details["body"] = msg.get_payload(decode=True)
+            body = msg.get_payload(decode=True).decode('utf-8')
+            email_details["body"] = clean_email_body(body)
 
         emails.append(email_details)
 
     mail.close()
     mail.logout()
+    df = pd.DataFrame(emails)
+    await save_df(df, output_name)
 
-    return pd.DataFrame(emails).to_json()
 
 
+def clean_email_body(body: str) -> str:
+    """Remove HTML tags and non-sentence elements from email body text."""
+
+
+    # Remove HTML tags using BeautifulSoup
+    soup = BeautifulSoup(body, "html.parser")
+    text = soup.get_text(separator=' ')
+
+    # Remove any non-sentence elements (e.g., URLs, email addresses, etc.)
+    text = re.sub(r'\S*@\S*\s?', '', text)  # Remove emails
+    text = re.sub(r'http\S+', '', text)  # Remove URLs
+    text = re.sub(r'[^.!?a-zA-Z0-9\s]', '', text)  # Remove non-sentence characters
+    text = ' '.join(text.split())  # Remove extra whitespace
+
+    return text
+
+
+@tool
+async def plot_dataframe(
+    data_id: Param(int, "Data ID of the dataframe"),
+    x: Param(str, "Column to use as x-axis"),
+    y: Param(str, "Column to use as y-axis"),
+    kind: Param(str, "Type of plot") = "line",
+    title: Param(str, "Title of the plot") = "Plot",
+    xlabel: Param(str, "Label for x-axis") = "X",
+    ylabel: Param(str, "Label for y-axis") = "Y",
+    ) -> Param(str, "JSON representation of the plot"):
+    """
+    Asynchronously generates a plot from a dataframe using Plotly and returns the plot as a JSON string.
+
+    Args:
+        data_id (int): The ID of the dataframe to plot.
+        x (str): The column name to use as the x-axis.
+        y (str): The column name to use as the y-axis.
+        kind (str): The type of plot to generate (e.g., 'line', 'scatter', 'bar').
+        title (str): The title of the plot.
+        xlabel (str): The label for the x-axis.
+        ylabel (str): The label for the y-axis.
+
+    Returns:
+        str: The JSON representation of the plot.
+    """
+    import plotly.express as px
+    df = await get_df(data_id)
+
+    if kind == 'line':
+        fig = px.line(df, x=x, y=y, title=title)
+    elif kind == 'scatter':
+        fig = px.scatter(df, x=x, y=y, title=title)
+    elif kind == 'bar':
+        fig = px.bar(df, x=x, y=y, title=title)
+    else:
+        raise ValueError(f"Unsupported plot type: {kind}")
+
+    fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel)
+
+    return fig.to_json()
 
