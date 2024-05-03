@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from streamlit_chat import message
 from textwrap import dedent
 import plotly.express as px
-from agent import ToolFlow
+from agent import ToolFlow, email_flow
 
 
 PROMPT = dedent("""Given a user query, construct a graph based representation of functions (nodes), and their data flow (edges) such that
@@ -113,8 +113,9 @@ def submit():
     with st.spinner(text="Wait for Agent..."):
         try:
             agent = get_agent()
-            flow  = agent.infer_flow(submit_text)
-            json_flow = json.loads(flow)
+            #flow  = agent.infer_flow(submit_text)
+            #json_flow = json.loads(flow)
+            json_flow = email_flow.dict()
             with st.expander("Show JSON Flow"):
                 plot_flow(json_flow)
             res = agent.execute_flow(json_flow, submit_text)

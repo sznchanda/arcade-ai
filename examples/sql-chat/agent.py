@@ -32,7 +32,7 @@ class ToolClient:
 
     def __init__(self, base_url: str):
         self.base_url = base_url
-        self.client = httpx.Client()
+        self.client = httpx.Client(timeout=30)
         self.tools = self.__collect_tool_specs()
 
     def __collect_tool_specs(self) -> Dict[str, str]:
@@ -115,6 +115,10 @@ class ToolRunner:
 
     def set_source(self, source: str):
         self._data_sources = self.__get_data_sources()
+
+        if not source:
+            return
+
         retries = 3
         data_id = None
         while retries > 0:
@@ -144,7 +148,9 @@ class ToolRunner:
 
     def __create_prompt(self, user_query: str, input_name: str, output_name: str) -> List[Dict[str, str]]:
         schema = self._data_schema
-        data_id = self._data_sources[input_name]
+        data_id = "No input"
+        if input_name:
+            data_id = self._data_sources[input_name]
         prompt = self.tool_prompt.format(schema=schema, data_id=data_id, output_name=output_name)
 
         messages = [
@@ -190,7 +196,7 @@ class ToolRunner:
                 else:
                     raise ValueError(f"Invalid params type: {type(params)}")
 
-        if "output_name" in args:
+        if "output_name" in args and output_name != "None":
             args["output_name"] = output_name
         if "data_id" in args:
             args["data_id"] = self._data_id
@@ -206,6 +212,9 @@ class ToolRunner:
         :return: The result of the tool
         """
         self.set_source(source)
+        print(f"Tool Name: {tool_name}")
+        print(f"Data ID: {self._data_id}")
+        print(f"Sourcing data from {source}")
         messages = self.__create_prompt(user_query, source, output_name)
         tool_args = self.get_tool_args(tool_name, messages, output_name)
         result = self._client.execute_tool(tool_name, tool_args)
@@ -248,9 +257,9 @@ class Edge(BaseModel):
 
 class ToolNode(BaseModel):
     node_id: int = Field(..., description="The ID of the node", ge=0)
-    input_name: str = Field(..., description="The name of the input data")
+    input_name: Optional[str] = Field(None, description="The name of the input data")
     tool_name: str = Field(..., description="The name of the tool to execute")
-    output_name: str = Field(..., description="The name of the output data")
+    output_name: Optional[str] = Field(..., description="The name of the output data")
 
 class OutputType(Enum):
     DATA = "data"
@@ -391,6 +400,8 @@ class ToolFlow:
         sink_output_type = self.tools[sink_tool_name][0]
         if sink_output_type == OutputType.DATA:
             data = self.runner.get_data_object(self.runner._data_id)
+        elif sink_output_type == OutputType.CHAT:
+            data = results[sink_node_id]["data"]["result"]
         else:
             data = results[sink_node_id]
 
@@ -452,9 +463,22 @@ def summarize_flow_results(model_client, flow_results: Dict[str, Any], flow_sche
 
 
 
+email_flow = FlowSchema(
+    nodes=[
+        ToolNode(node_id=0, input_name=None, tool_name="ReadEmail", output_name="email_data_1"),
+        ToolNode(node_id=1, input_name="email_data_1", tool_name="Summarize", output_name=None),
+    ],
+    edges=[
+        Edge(source=0, target=1)
+    ],
+    output_type=OutputType.CHAT
+)
 
 
+class Agent:
 
+    def __init__(self, flows: Dict[str, FlowSchema]):
+        self.flows = flows
 
 
 
