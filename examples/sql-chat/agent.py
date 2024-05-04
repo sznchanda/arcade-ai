@@ -462,6 +462,17 @@ def summarize_flow_results(model_client, flow_results: Dict[str, Any], flow_sche
 
 
 
+plotting_flow = FlowSchema(
+    nodes=[
+        ToolNode(node_id=0, input_name="products", tool_name="query_sql", output_name="product_data"),
+        ToolNode(node_id=1, input_name="product_data", tool_name="PlotDataframe", output_name=None),
+    ],
+    edges=[
+        Edge(source=0, target=1)
+    ],
+    output_type=OutputType.ARTIFACT
+)
+
 
 email_flow = FlowSchema(
     nodes=[

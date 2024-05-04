@@ -115,6 +115,7 @@ def clean_email_body(body: str) -> str:
     return text
 
 
+
 @tool
 async def plot_dataframe(
     data_id: Param(int, "Data ID of the dataframe"),
@@ -149,6 +150,8 @@ async def plot_dataframe(
         fig = px.scatter(df, x=x, y=y, title=title)
     elif kind == 'bar':
         fig = px.bar(df, x=x, y=y, title=title)
+    elif kind == "histogram":
+        fig = px.histogram(df, x=x, title=title)
     else:
         raise ValueError(f"Unsupported plot type: {kind}")
 

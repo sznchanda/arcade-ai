@@ -18,9 +18,11 @@ import pandas as pd
 import streamlit as st
 from pydantic import BaseModel
 from streamlit_chat import message
+import streamlit.components.v1 as components
 from textwrap import dedent
 import plotly.express as px
-from agent import ToolFlow, email_flow
+from agent import ToolFlow, email_flow, plotting_flow
+
 
 
 PROMPT = dedent("""Given a user query, construct a graph based representation of functions (nodes), and their data flow (edges) such that
@@ -40,9 +42,14 @@ The available input names for the source are:
 {sources}
 """)
 
-oai_key = "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"
 
 def plot_flow(data: Dict[str, Any]):
+    """
+    Plot the flow of data using a directed graph.
+
+    Args:
+        data (Dict[str, Any]): A dictionary containing 'nodes' and optionally 'edges'.
+    """
     # Create a directed graph
     G = nx.DiGraph()
 
@@ -58,15 +65,19 @@ def plot_flow(data: Dict[str, Any]):
     # Node labels with specific formatting
     labels = {node['node_id']: f"{node['tool_name']}\n({node['input_name']} -> {node['output_name']})" for node in data['nodes']}
 
-    # Position nodes using the spring layout
-    pos = nx.spring_layout(G)
-    plt.figure(figsize=(4, 3))
+    # Check if there are any nodes to determine a start node for bfs_layout
+    if G.nodes:
+        start_node = next(iter(G.nodes))  # Get an arbitrary start node
+        pos = nx.bfs_layout(G, start_node)
+    else:
+        pos = {}
+
+    plt.figure(figsize=(7, 7))
     nx.draw(G, pos, with_labels=False, node_size=3000, node_color='skyblue', font_size=9, font_weight='bold')
     nx.draw_networkx_labels(G, pos, labels, font_size=8)
 
-    st.write("Graph of the data flow:")
     # Use Streamlit's function to display the plot
-    st.pyplot(plt, use_container_width=False)
+    st.sidebar.pyplot(plt, use_container_width=True)
 
 
 @st.cache_resource()
@@ -81,9 +92,11 @@ def get_agent():
 
 
 # From here down is all the StreamLit UI.
-st.set_page_config(page_title="Data Chat", page_icon=":robot:", layout="wide")
-st.header("Arcade AI Demo")
+st.set_page_config(page_title="Arcade AI Demo", page_icon=":robot:", layout="wide")
 
+dropdown_options = ["Gmailer", "PlotBot"]
+selected_option = st.sidebar.selectbox("Select an App:", dropdown_options)
+st.sidebar.write(f"Selected App: {selected_option}")
 
 def initialize_logger():
     logger = logging.getLogger("root")
@@ -101,7 +114,7 @@ if "generated" not in st.session_state:
 
 
 
-st.subheader("Chat")
+st.subheader("Arcade AI Agent Demo")
 
 
 chat_container = st.container()
@@ -115,9 +128,15 @@ def submit():
             agent = get_agent()
             #flow  = agent.infer_flow(submit_text)
             #json_flow = json.loads(flow)
-            json_flow = email_flow.dict()
-            with st.expander("Show JSON Flow"):
-                plot_flow(json_flow)
+            if selected_option == "Gmailer":
+                json_flow = email_flow.dict()
+            elif selected_option == "PlotBot":
+                json_flow = plotting_flow.dict()
+            else:
+                st.error("Invalid option selected")
+                return
+
+            plot_flow(json_flow)
             res = agent.execute_flow(json_flow, submit_text)
         except Exception:
             st.error("Error executing the flow:")
