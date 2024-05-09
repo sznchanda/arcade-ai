@@ -7,8 +7,8 @@ import openai
 
 @tool
 async def summarize(
-    #text: Param(str, "Text to summarize"),
-    data_id: Param(int, "ID of the data to summarize"),
+    text: Param(str, "Text to summarize"),
+    #data_id: Param(int, "ID of the data to summarize"),
     system_prompt: Param(str, "System prompt to use") = "Summarize the following text",
     max_tokens: Param(int, "Maximum number of tokens to generate") = 1000,
     ) -> Param(str, "Summarized text"):
@@ -21,11 +21,15 @@ async def summarize(
     Returns:
         str: The summarized text.
     """
-    df = await get_df(data_id)
-    text = df.to_json(orient='records')
+    #df = await get_df(data_id)
+    #text = df.to_json(orient='records')
     api_key = get_secret("openai_api_key", None)
     model = get_secret("openai_model_summarize", "gpt-4-turbo")
     # Call the OpenAI model with the tools and messages
+
+    if isinstance(text, list):
+        text = "\n".join(text)
+
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": text},

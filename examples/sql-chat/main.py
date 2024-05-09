@@ -21,7 +21,7 @@ from streamlit_chat import message
 import streamlit.components.v1 as components
 from textwrap import dedent
 import plotly.express as px
-from agent import ToolFlow, email_flow, plotting_flow
+from agent import ToolFlow, email_flow, plotting_flow, review_flow, customer_flow
 
 
 
@@ -67,8 +67,9 @@ def plot_flow(data: Dict[str, Any]):
 
     # Check if there are any nodes to determine a start node for bfs_layout
     if G.nodes:
-        start_node = next(iter(G.nodes))  # Get an arbitrary start node
-        pos = nx.bfs_layout(G, start_node)
+        #start_node = next(iter(G.nodes))  # Get an arbitrary start node
+        #pos = nx.bfs_layout(G, start_node)
+        pos = nx.spring_layout(G)
     else:
         pos = {}
 
@@ -94,7 +95,7 @@ def get_agent():
 # From here down is all the StreamLit UI.
 st.set_page_config(page_title="Arcade AI Demo", page_icon=":robot:", layout="wide")
 
-dropdown_options = ["Gmailer", "PlotBot"]
+dropdown_options = ["Gmailer", "PlotBot", "ReviewChat", "CustomerService"]
 selected_option = st.sidebar.selectbox("Select an App:", dropdown_options)
 st.sidebar.write(f"Selected App: {selected_option}")
 
@@ -132,6 +133,10 @@ def submit():
                 json_flow = email_flow.dict()
             elif selected_option == "PlotBot":
                 json_flow = plotting_flow.dict()
+            elif selected_option == "ReviewChat":
+                json_flow = review_flow.dict()
+            elif selected_option == "CustomerService":
+                json_flow = customer_flow.dict()
             else:
                 st.error("Invalid option selected")
                 return
@@ -160,20 +165,27 @@ if st.session_state["generated"]:
             message(st.session_state["past"][i], is_user=True, key=str(i) + "_user")
 
             result = st.session_state["generated"][i]
-            res, all_results, output_type = result
+            result_tab, all_results_tab, times_tab = st.tabs(["Result", "All Results", "Execution Times"])
 
+            res, all_results, output_type, timings = result
 
-            output_type = output_type.value
-            if output_type == "artifact":
-                # plot the json returned in res
-                fig_json = res["data"]["result"]
-                # plot the json with ploylu atream lit
-                st.plotly_chart(json.loads(fig_json))
-            elif output_type == "chat":
-                st.write(res)
-            elif output_type == "data":
-                json_res = json.loads(res)["data"]
-                st.dataframe(json_res)
-            else:
-                st.error("Returned result:")
-                st.error(res)
+            with all_results_tab:
+                st.write(all_results)
+            with times_tab:
+                st.write(timings)
+            with result_tab:
+                output_type = output_type.value
+                if output_type == "artifact":
+                    # plot the json returned in res
+                    fig_json = res["data"]["result"]
+                    # plot the json with ploylu atream lit
+                    st.plotly_chart(json.loads(fig_json))
+                elif output_type == "chat":
+                    st.write(res)
+                elif output_type == "data":
+                    json_res = json.loads(res)["data"]
+                    st.dataframe(json_res)
+                else:
+                    st.error("Returned result:")
+                    st.error(res)
+

@@ -53,9 +53,12 @@ async def query_sql(
     """Query a data source using SQL
 
     The SQL query should be parameterized with DuckDB's syntax. For example, to query a
-    DataFrame named `df` with a parameter `param`, the query should be `SELECT * FROM df WHERE column = ?`.
+    DataFrame named `df` with a parameter `param`, the query should be `SELECT * FROM df WHERE ? = ?`.
 
     The list of params should be in order of the parameters in the SQL query.
+
+    IMPORTANT: There should be no parameters in the query.
+    For example: `SELECT * FROM df WHERE name = ?` should be `SELECT * FROM df WHERE ? = ?`.
 
     After the query, a new data source at a new id will be created with the results and
     the schema of the data source will be returned.
@@ -71,7 +74,6 @@ async def query_sql(
     """
     try:
         # Retrieve the DataFrame and execute the SQL query using DuckDB
-        import duckdb
         df = await get_df(data_id)
         con = duckdb.connect(database=':memory:', read_only=False)
         con.register('df_table', df)
@@ -88,9 +90,11 @@ async def query_sql(
 
     except Exception as e:
         # Log the error and raise an exception
-        await log(f"Failed to execute query: {str(e)}", level="ERROR")
+        log_message = f"Failed to execute query: {str(e)}."
+        log_message += f" -- SQL: {sql}"
+        log_message += f" -- Parameters: {params}"
+        await log(log_message, level="ERROR")
         raise RuntimeError(f"Query execution failed: {str(e)}")
-
 
 def get_df_info(df: pd.DataFrame, data_id: Optional[int]=None) -> Dict[str, Union[int, str]]:
     """

@@ -48,9 +48,9 @@ async def send_email(
 
 @tool
 async def read_email(
-    output_name: Param(str, "Name of the output data"),
+    #output_name: Param(str, "Name of the output data"),
     n_emails: Param(int, "Number of emails to read") = 5,
-    ):
+    ) -> Param(str, "emails"):
     """Read emails from a Gmail account and extract plain text content, removing any HTML."""
 
     email_address = get_secret("gmail_email")
@@ -70,31 +70,37 @@ async def read_email(
     emails = []
 
     for email_id in email_ids[:n_emails]:
-        result, data = mail.fetch(email_id, "(RFC822)")
-        raw_email = data[0][1]
-        msg = email.message_from_bytes(raw_email)
+        try:
+            result, data = mail.fetch(email_id, "(RFC822)")
+            raw_email = data[0][1]
+            msg = email.message_from_bytes(raw_email)
 
-        email_details = {
-            "from": msg["From"],
-            "to": msg["To"],
-            "date": msg["Date"]
-        }
+            email_details = {
+                "from": msg["From"],
+                "to": msg["To"],
+                "date": msg["Date"]
+            }
 
-        if msg.is_multipart():
-            for part in msg.walk():
-                if part.get_content_type() == "text/plain":
-                    body = part.get_payload(decode=True).decode('utf-8')
-                    email_details["body"] = clean_email_body(body)
-        else:
-            body = msg.get_payload(decode=True).decode('utf-8')
-            email_details["body"] = clean_email_body(body)
+            if msg.is_multipart():
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        body = part.get_payload(decode=True).decode('utf-8')
+                        email_details["body"] = clean_email_body(body)
+            else:
+                body = msg.get_payload(decode=True).decode('utf-8')
+                email_details["body"] = clean_email_body(body)
+        except Exception as e:
+            print(f"Error reading email {email_id}: {e}")
+            continue
 
         emails.append(email_details)
 
     mail.close()
     mail.logout()
-    df = pd.DataFrame(emails)
-    await save_df(df, output_name)
+    #df = pd.DataFrame(emails)
+    #await save_df(df, output_name)
+    data = "\n".join([f"{email['from']} - {email['date']}\n{email['body']}\n" for email in emails])
+    return data
 
 
 

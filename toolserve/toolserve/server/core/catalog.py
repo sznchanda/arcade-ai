@@ -120,7 +120,14 @@ class ToolCatalog:
         return None
 
     def list_tools(self) -> List[Dict[str, str]]:
-        return [{'name': t.name, 'description': t.description} for t in self.tools.values()]
+        def get_tool_endpoint(t: ToolSchema) -> str:
+            return f"/tool/{t.meta.module}/{t.name}"
+        return [
+            {'name': t.name,
+             'description': t.description,
+             'endpoint': get_tool_endpoint(t)
+            } for t in self.tools.values()]
+
 
 
 

@@ -24,6 +24,14 @@ class Settings(BaseSettings):
         "query.list_data_sources@builtin",
         "query.get_data_schema@builtin",
         "query.query_sql@builtin",
+        "data.get@builtin",
+        "data.select_columns@builtin",
+        "data.filter_rows@builtin",
+        "data.sort@builtin",
+        "data.group_by@builtin",
+        "data.join@builtin",
+        "data.search_text_columns@builtin",
+        "data.combine_results@builtin",
     ]
 
     # Env Config

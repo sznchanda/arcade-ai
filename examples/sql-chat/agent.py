@@ -2,7 +2,7 @@ import httpx
 import json
 import time
 import openai
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel
 from typing import List, Dict
@@ -17,30 +17,77 @@ from typing import Dict, Any, Optional
 import json
 from collections import deque
 
+def pydantic_to_openai_tool(model: Type[BaseModel]) -> str:
+    """
+    Convert a Pydantic model to an OpenAI tool schema.
+
+    Args:
+        model (Type[BaseModel]): The Pydantic model to convert.
+
+    Returns:
+        str: The OpenAI tool schema.
+    """
+    schema = model_to_json_schema(model)
+    tool_schema = {
+        "type": "function",
+        "function": {
+            "name": model.__name__,
+            "description": model.__doc__ or "",
+            "parameters": schema
+        }
+    }
+    return json.dumps(tool_schema)
+
+class Edge(BaseModel):
+    source: int = Field(..., description="The ID of the source node")
+    target: int = Field(..., description="The ID of the target node")
+
+class ToolNode(BaseModel):
+    node_id: int = Field(..., description="The ID of the node", ge=0)
+    input_name: Optional[str] = Field(None, description="The name of the input data")
+    tool_name: str = Field(..., description="The name of the tool to execute")
+    output_name: Optional[str] = Field(None, description="The name of the output data")
+    predict_args: bool = Field(True, description="Whether to predict the arguments for the tool")
+    from_node: Optional[Dict[str, int]] = Field(None, description="The ID of the source node name of the argument to pass to the tool")
+    args: Optional[Dict[str, Any]] = Field(None, description="The arguments to pass to the tool")
+
+
+class OutputType(Enum):
+    DATA = "data"
+    CHAT = "chat"
+    ARTIFACT = "artifact"
+
+class FlowSchema(BaseModel):
+    """A graph based representation of functions (nodes), and their data flow (edges)"""
+
+    nodes: List[ToolNode] = Field(..., description="The nodes in the flow")
+    edges: List[Edge] = Field([], description="The IDs of the adjacent nodes")
+    output_type: OutputType = Field(OutputType.CHAT, description="The type of the output")
+
+    class Config:
+        arbitrary_types_allowed = True
+        use_enum_values = True
 
 
 class ToolClient:
 
-    available_tools = {
-        "query_sql": "/tool/query/query_sql",
-        "list_data_sources": "/tool/query/list_data_sources",
-        "get_data_schema": "/tool/query/get_data_schema",
-        "PlotDataframe": "/tool/gmailer/PlotDataframe",
-        "ReadEmail": "/tool/gmailer/ReadEmail",
-        "Summarize": "/tool/chat/Summarize",
-    }
-
     def __init__(self, base_url: str):
         self.base_url = base_url
-        self.client = httpx.Client(timeout=30)
-        self.tools = self.__collect_tool_specs()
+        self.client = httpx.Client(timeout=3000)
+        tools, routes = self.__collect_tool_specs()
+        self.tools = tools
+        self.available_tools = routes
+
 
     def __collect_tool_specs(self) -> Dict[str, str]:
+        tools_list = self.call_api("GET", "/api/v1/tools/list").get("data", {})
+        all_tools = [tool["name"] for tool in tools_list]
+        routes = {tool["name"]: tool["endpoint"] for tool in tools_list}
         tools = {}
-        for tool_name, endpoint in self.available_tools.items():
+        for tool_name, endpoint in routes.items():
             openai_spec = self.call_api("GET", "/api/v1/tools/oai_function", params={"tool_name": tool_name}).get("data", {})
             tools[tool_name] = openai_spec
-        return tools
+        return tools, routes
 
     def call_api(self, method: str, endpoint: str, params: dict = {}, data: dict = {}, json_data: dict = {}) -> Dict[str, Any]:
         """Call the Darkstar Toolserver API with the given parameters.
@@ -173,7 +220,6 @@ class ToolRunner:
             raise ValueError(f"Tool '{tool_name}' not found in available tools.")
 
         tool = json.loads(func_spec)
-        print(tool)
         # Call the OpenAI model with the tools and messages
         completion = self._openai_client.chat.completions.create(
             model="gpt-4-turbo",
@@ -198,26 +244,37 @@ class ToolRunner:
 
         if "output_name" in args and output_name != "None":
             args["output_name"] = output_name
-        if "data_id" in args:
-            args["data_id"] = self._data_id
 
         return args
 
-    def run_tool(self, tool_name: str, user_query: str, source: str, output_name: str) -> Any:
+    def run_tool(self, tool: ToolNode, user_query: str, **kwargs) -> Any:
         """
         Executes an tool using the Darkstar Toolserver API and an OpenAI model.
-
-        :param tool_name: The name of the tool to execute.
-        :param user_query: The user query to provide to the model.
-        :return: The result of the tool
         """
+        source = None
+        if tool.input_name:
+            source = tool.input_name
         self.set_source(source)
-        print(f"Tool Name: {tool_name}")
-        print(f"Data ID: {self._data_id}")
-        print(f"Sourcing data from {source}")
-        messages = self.__create_prompt(user_query, source, output_name)
-        tool_args = self.get_tool_args(tool_name, messages, output_name)
-        result = self._client.execute_tool(tool_name, tool_args)
+
+        if tool.predict_args:
+            messages = self.__create_prompt(user_query, source, tool.output_name)
+            tool_args = self.get_tool_args(tool.tool_name, messages, tool.output_name)
+        elif tool.from_node:
+            # todo change to list
+            tool_args = kwargs.get("tool_args", {})
+        else:
+            tool_args = {}
+
+        # TODO would something ever have an input_name and not need a data_id?
+        if tool.input_name:
+            tool_args["data_id"] = self._data_id
+
+        if tool.args:
+            tool_args.update(tool.args)
+
+
+        print("Calling tool with args:", tool_args)
+        result = self._client.execute_tool(tool.tool_name, tool_args)
         return result
 
     def get_data_object(self, data_id: int) -> Dict[str, Any]:
@@ -230,62 +287,9 @@ class ToolRunner:
         return self._client.call_api("GET", f"/api/v1/data/object/{data_id}")["data"]["json_blob"]
 
 
-def pydantic_to_openai_tool(model: Type[BaseModel]) -> str:
-    """
-    Convert a Pydantic model to an OpenAI tool schema.
 
-    Args:
-        model (Type[BaseModel]): The Pydantic model to convert.
-
-    Returns:
-        str: The OpenAI tool schema.
-    """
-    schema = model_to_json_schema(model)
-    tool_schema = {
-        "type": "function",
-        "function": {
-            "name": model.__name__,
-            "description": model.__doc__ or "",
-            "parameters": schema
-        }
-    }
-    return json.dumps(tool_schema)
-
-class Edge(BaseModel):
-    source: int = Field(..., description="The ID of the source node")
-    target: int = Field(..., description="The ID of the target node")
-
-class ToolNode(BaseModel):
-    node_id: int = Field(..., description="The ID of the node", ge=0)
-    input_name: Optional[str] = Field(None, description="The name of the input data")
-    tool_name: str = Field(..., description="The name of the tool to execute")
-    output_name: Optional[str] = Field(..., description="The name of the output data")
-
-class OutputType(Enum):
-    DATA = "data"
-    CHAT = "chat"
-    ARTIFACT = "artifact"
-
-class FlowSchema(BaseModel):
-    """A graph based representation of functions (nodes), and their data flow (edges)"""
-
-    nodes: List[ToolNode] = Field(..., description="The nodes in the flow")
-    edges: List[Edge] = Field([], description="The IDs of the adjacent nodes")
-    output_type: OutputType = Field(OutputType.CHAT, description="The type of the output")
-
-    class Config:
-        arbitrary_types_allowed = True
-        use_enum_values = True
 
 class ToolFlow:
-
-    tools = {
-        "query_sql": (OutputType.DATA, True, False),
-        "PlotDataframe": (OutputType.ARTIFACT, False, True),
-        "ReadEmail": (OutputType.CHAT, True, False),
-        "Summarize": (OutputType.CHAT, False, True),
-
-    }
 
     def __init__(
         self,
@@ -303,24 +307,6 @@ class ToolFlow:
         self.model = model
         self.openai_client = openai.Client(api_key=model_api_key)
 
-
-    def __create_prompt(self, user_query: str) -> List[Dict[str, str]]:
-        tool_list = ""
-        for tool, spec in self.tools.items():
-            tool_list += f"- Name: {tool}\n"
-            tool_list += f" - Output Type: {spec[0].value}\n"
-            tool_list += f" - Can be source node: {spec[1]}\n"
-            tool_list += f" - Can be sink node: {spec[2]}\n"
-
-        source_list = "\n".join(self.runner._data_sources.keys())
-
-        prompt = self.prompt.format(nodes=tool_list, sources=source_list)
-
-        messages = [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": user_query}
-        ]
-        return messages
 
     def infer_flow(self, user_query: str) -> FlowSchema:
         """
@@ -364,10 +350,17 @@ class ToolFlow:
 
 
         # Initialize a queue for BFS
-        execution_queue = deque([flow_schema['nodes'][0]])  # Start BFS from the source node
+        # Queue up all nodes which don't have incoming edges
+        incoming_edges = {node['node_id']: 0 for node in flow_schema['nodes']}
+        for edge in flow_schema.get('edges', []):
+            incoming_edges[edge['target']] += 1
+        execution_queue = deque([node for node in flow_schema['nodes'] if incoming_edges[node['node_id']] == 0])
+
         visited = set()
         results = {}
+        timings = {}
 
+        flow_start_time = time.time()
         while execution_queue:
             current_node = execution_queue.popleft()
             node_id = current_node['node_id']
@@ -376,14 +369,22 @@ class ToolFlow:
                 continue
             visited.add(node_id)
 
+            exec_start_time = time.time()
             # Execute the current node's operation using runner.run_tool
-            operation_result = self.runner.run_tool(
-                current_node['tool_name'],
-                user_query,
-                current_node['input_name'],
-                current_node['output_name']
-            )
+            current_tool = ToolNode(**current_node)
+            if current_tool.from_node:
+                tool_args = {}
+                for arg_name, from_node_id in current_tool.from_node.items():
+                    from_node_result = results[from_node_id]["data"]["result"]
+                    tool_args[arg_name] = from_node_result
+
+                operation_result = self.runner.run_tool(current_tool, user_query, tool_args=tool_args)
+            else:
+                operation_result = self.runner.run_tool(current_tool, user_query)
+
             results[node_id] = operation_result
+            exec_end_time = time.time()
+            timings[current_tool.tool_name] = exec_end_time - exec_start_time
 
             # Enqueue all adjacent nodes
             for edge in flow_schema.get('edges', []):
@@ -397,7 +398,13 @@ class ToolFlow:
         sink_node = flow_schema['nodes'][-1]
         sink_tool_name = sink_node['tool_name']
         sink_node_id = sink_node['node_id']
-        sink_output_type = self.tools[sink_tool_name][0]
+        # TODO: Tools need to specify output type
+        #sink_output_type = self.tools[sink_tool_name][0]
+        sink_output_type = OutputType(flow_schema['output_type'])
+
+        flow_end_time = time.time()
+        timings['total'] = flow_end_time - flow_start_time
+
         if sink_output_type == OutputType.DATA:
             data = self.runner.get_data_object(self.runner._data_id)
         elif sink_output_type == OutputType.CHAT:
@@ -405,59 +412,7 @@ class ToolFlow:
         else:
             data = results[sink_node_id]
 
-        return (data, results, sink_output_type)
-
-
-def summarize_flow_results(model_client, flow_results: Dict[str, Any], flow_schema) -> str:
-    """
-    Summarizes the results of a tool flow execution using an OpenAI model to generate a chat response.
-
-    Args:
-        model_client (openai.Client): The OpenAI client to use for generating chat responses.
-        flow_results (Dict[str, Any]): The results of the tool flow execution.
-        flow_schema (Dict[str, Any]): The schema representing the tool flow.
-
-
-    Returns:
-        Dict[str, str]: A dictionary containing the chat response under the key "data".
-    """
-    try:
-        # Check if flow_results is already a JSON string, otherwise convert it
-        if isinstance(flow_results, str):
-            flow_summary = flow_results
-        else:
-            flow_summary = json.dumps(flow_results, indent=2)
-
-        # Construct a concise and informative prompt for the chat model
-        prompt_content = dedent(f"""
-            Please review the tool execution results and the flow schema provided below.
-            Use the results of the final tool to describe the outcomes. Be concise and only use the provided information.
-            If the results seem incorrect or incomplete, kindly ask the user to reformulate their query for better accuracy.
-
-            The execution path, expressed a a JSON object where nodes represent tools and edges represent data flow:
-            {flow_schema}
-
-            The results of the execution, expressed as a JSON object:
-            {flow_summary}
-
-        """)
-
-        messages = [
-            {"role": "system", "content": prompt_content}
-        ]
-
-        # Call the OpenAI chat model
-        response = model_client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=messages
-        )
-
-        # Extract the chat response
-        chat_response = response.choices[0].message.content
-        return chat_response
-    except Exception as e:
-        print(f"Error in summarizing flow results: {e}")
-        return "Error: Failed to generate summary due to an internal error."
+        return (data, results, sink_output_type, timings)
 
 
 
@@ -474,7 +429,7 @@ plotting_flow = FlowSchema(
 )
 
 
-email_flow = FlowSchema(
+email_flow_1 = FlowSchema(
     nodes=[
         ToolNode(node_id=0, input_name=None, tool_name="ReadEmail", output_name="email_data_1"),
         ToolNode(node_id=1, input_name="email_data_1", tool_name="Summarize", output_name=None),
@@ -485,11 +440,68 @@ email_flow = FlowSchema(
     output_type=OutputType.CHAT
 )
 
+email_flow = FlowSchema(
+    nodes=[
+        ToolNode(node_id=0, tool_name="ReadEmail"),
+        ToolNode(node_id=1, tool_name="Summarize", from_node={"text": 2}, predict_args=False),
+    ],
+    edges=[
+        Edge(source=0, target=1)
+    ],
+    output_type=OutputType.CHAT
+)
 
-class Agent:
+review_db = "/Users/spartee/Dropbox/Arcade/platform/toolserver/examples/data/food-reviews/database.sqlite"
+review_flow = FlowSchema(
+    nodes=[
+        ToolNode(node_id=0, tool_name="ReadSqlite", args={"table_name": "Reviews", "file_path": review_db, "output_name": "reviews"}, predict_args=False),
+        ToolNode(node_id=1, input_name="reviews", tool_name="query_sql", output_name="review_data"),
+        ToolNode(node_id=2, input_name="review_data", tool_name="search_text_columns"),
+        ToolNode(node_id=3, tool_name="Summarize", from_node={"text": 2}, predict_args=False),
+    ],
+    edges=[
+        Edge(source=0, target=1),
+        Edge(source=1, target=2),
+        Edge(source=2, target=3)
+    ],
+    output_type=OutputType.CHAT
+)
 
-    def __init__(self, flows: Dict[str, FlowSchema]):
-        self.flows = flows
+
+shopify_db = "/Users/spartee/Dropbox/Arcade/platform/toolserver/examples/data/olist.sqlite"
+customer_flow = FlowSchema(
+    nodes=[
+        ToolNode(node_id=0, tool_name="ReadSqlite", args={"table_name": "customers", "file_path": shopify_db, "output_name": "customers"}, predict_args=False),
+        ToolNode(node_id=1, tool_name="ReadSqlite", args={"table_name": "orders", "file_path": shopify_db, "output_name": "all_customer_orders"}, predict_args=False),
+        ToolNode(node_id=2, input_name="customers", tool_name="query_sql", output_name="customer_data"),
+        ToolNode(node_id=3, input_name="all_customer_orders", tool_name="query_sql", output_name="customer_orders"),
+        ToolNode(node_id=4, input_name="customer_data", tool_name="get"),
+        ToolNode(node_id=5, input_name="customer_orders", tool_name="get"),
+        ToolNode(node_id=6, tool_name="combine_results", from_node={"result_1": 4, "result_2": 5}, predict_args=False),
+        ToolNode(node_id=7, tool_name="Summarize", from_node={"text": 6}, predict_args=False)
+    ],
+    edges=[
+        Edge(source=0, target=2),
+        Edge(source=1, target=3),
+        Edge(source=2, target=4),
+        Edge(source=3, target=5),
+        Edge(source=4, target=6),
+        Edge(source=5, target=6),
+        Edge(source=6, target=7)
+    ],
+    output_type=OutputType.CHAT
+)
+
+
+
+def print_flow_as_yaml(data: Dict[str, Any]):
+
+    data_dict = data.dict(exclude_unset=True) if isinstance(data, BaseModel) else data
+    # Convert the dictionary to a YAML formatted string
+    yaml_str = yaml.dump(data_dict, sort_keys=False)
+
+    # Print the YAML string
+    print(yaml_str)
 
 
 
