@@ -2,6 +2,7 @@ import httpx
 import json
 import time
 import openai
+import uuid
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel
@@ -41,6 +42,7 @@ def pydantic_to_openai_tool(model: Type[BaseModel]) -> str:
 class Edge(BaseModel):
     source: int = Field(..., description="The ID of the source node")
     target: int = Field(..., description="The ID of the target node")
+    uuid: str = Field(default_factory=lambda: str(uuid.uuid4()), description="UUID for the data flow between nodes")
 
 class ToolNode(BaseModel):
     node_id: int = Field(..., description="The ID of the node", ge=0)
@@ -50,7 +52,7 @@ class ToolNode(BaseModel):
     predict_args: bool = Field(True, description="Whether to predict the arguments for the tool")
     from_node: Optional[Dict[str, int]] = Field(None, description="The ID of the source node name of the argument to pass to the tool")
     args: Optional[Dict[str, Any]] = Field(None, description="The arguments to pass to the tool")
-
+    allow_extra: bool = Field(False, description="Whether to allow extra arguments to be passed to the tool")
 
 class OutputType(Enum):
     DATA = "data"
@@ -64,10 +66,37 @@ class FlowSchema(BaseModel):
     edges: List[Edge] = Field([], description="The IDs of the adjacent nodes")
     output_type: OutputType = Field(OutputType.CHAT, description="The type of the output")
 
+    def __init__(self, **data):
+        super().__init__(**data)
+        self.generate_uuids_for_edges()
+
     class Config:
         arbitrary_types_allowed = True
         use_enum_values = True
 
+    def generate_uuids_for_edges(self):
+        edge_map = {}
+        for edge in self.edges:
+            edge_map[(edge.source, edge.target)] = edge.uuid
+        for node in self.nodes:
+            incoming_edges = [e.uuid for e in self.edges if e.target == node.node_id]
+            outgoing_edges = [e.uuid for e in self.edges if e.source == node.node_id]
+            if node.from_node:
+                node.input_name = None
+                node.output_name = None
+                # Set the output of the source node and the input of the target node to None
+                for edge in self.edges:
+                    if edge.target == node.node_id:
+                        source_node = next((n for n in self.nodes if n.node_id == edge.source), None)
+                        if source_node:
+                            source_node.output_name = None
+                    if edge.source == node.node_id:
+                        target_node = next((n for n in self.nodes if n.node_id == edge.target), None)
+                        if target_node:
+                            target_node.input_name = None
+            else:
+                node.input_name = incoming_edges[0] if incoming_edges else None
+                node.output_name = outgoing_edges[0] if outgoing_edges else None
 
 class ToolClient:
 
@@ -259,19 +288,18 @@ class ToolRunner:
         if tool.predict_args:
             messages = self.__create_prompt(user_query, source, tool.output_name)
             tool_args = self.get_tool_args(tool.tool_name, messages, tool.output_name)
-        elif tool.from_node:
-            # todo change to list
-            tool_args = kwargs.get("tool_args", {})
         else:
-            tool_args = {}
+            tool_args = kwargs.get("tool_args", {})
 
         # TODO would something ever have an input_name and not need a data_id?
         if tool.input_name:
             tool_args["data_id"] = self._data_id
 
+        if tool.output_name:
+            tool_args["output_name"] = tool.output_name
+
         if tool.args:
             tool_args.update(tool.args)
-
 
         print("Calling tool with args:", tool_args)
         result = self._client.execute_tool(tool.tool_name, tool_args)
@@ -295,20 +323,19 @@ class ToolFlow:
         self,
         name: str,
         description: str,
-        prompt: str,
         base_url: str = "http://localhost:8000",
         model: str = "gpt-4-turbo",
         model_api_key: Optional[str] = None
         ):
         self.name = name
         self.description = description
-        self.prompt = prompt
+
         self.runner = ToolRunner(base_url, model, model_api_key)
         self.model = model
         self.openai_client = openai.Client(api_key=model_api_key)
 
 
-    def execute_flow(self, flow_schema: Dict[str, Any], user_query: str) -> Any:
+    def execute_flow(self, flow_schema: Dict[str, Any], user_query: str, user_args: Dict[str, Any] = {}) -> Any:
         """
         Executes the tool flow based on the provided schema. This method performs a breadth-first search (BFS)
         on the graph defined by the flow schema and executes each node according to the order determined by the BFS.
@@ -343,6 +370,8 @@ class ToolFlow:
             visited.add(node_id)
 
             exec_start_time = time.time()
+
+            tool_args = {}
             # Execute the current node's operation using runner.run_tool
             current_tool = ToolNode(**current_node)
             if current_tool.from_node:
@@ -350,10 +379,9 @@ class ToolFlow:
                 for arg_name, from_node_id in current_tool.from_node.items():
                     from_node_result = results[from_node_id]["data"]["result"]
                     tool_args[arg_name] = from_node_result
-
-                operation_result = self.runner.run_tool(current_tool, user_query, tool_args=tool_args)
-            else:
-                operation_result = self.runner.run_tool(current_tool, user_query)
+            if current_tool.allow_extra:
+                tool_args.update(user_args)
+            operation_result = self.runner.run_tool(current_tool, user_query, tool_args=tool_args)
 
             results[node_id] = operation_result
             exec_end_time = time.time()
@@ -388,48 +416,12 @@ class ToolFlow:
         return (data, results, sink_output_type, timings)
 
 
-
-
-plotting_flow = FlowSchema(
-    nodes=[
-        ToolNode(node_id=0, input_name="products", tool_name="query_sql", output_name="product_data"),
-        ToolNode(node_id=1, input_name="product_data", tool_name="PlotDataframe", output_name=None),
-    ],
-    edges=[
-        Edge(source=0, target=1)
-    ],
-    output_type=OutputType.ARTIFACT
-)
-
-
-email_flow_1 = FlowSchema(
-    nodes=[
-        ToolNode(node_id=0, input_name=None, tool_name="ReadEmail", output_name="email_data_1"),
-        ToolNode(node_id=1, input_name="email_data_1", tool_name="Summarize", output_name=None),
-    ],
-    edges=[
-        Edge(source=0, target=1)
-    ],
-    output_type=OutputType.CHAT
-)
-
-email_flow = FlowSchema(
-    nodes=[
-        ToolNode(node_id=0, tool_name="ReadEmail"),
-        ToolNode(node_id=1, tool_name="Summarize", from_node={"text": 2}, predict_args=False),
-    ],
-    edges=[
-        Edge(source=0, target=1)
-    ],
-    output_type=OutputType.CHAT
-)
-
 review_db = "/Users/spartee/Dropbox/Arcade/platform/toolserver/examples/data/food-reviews/database.sqlite"
 review_flow = FlowSchema(
     nodes=[
-        ToolNode(node_id=0, tool_name="ReadSqlite", args={"table_name": "Reviews", "file_path": review_db, "output_name": "reviews"}, predict_args=False),
-        ToolNode(node_id=1, input_name="reviews", tool_name="query_sql", output_name="review_data"),
-        ToolNode(node_id=2, input_name="review_data", tool_name="search_text_columns"),
+        ToolNode(node_id=0, tool_name="ReadSqlite", args={"table_name": "Reviews", "file_path": review_db}, predict_args=False),
+        ToolNode(node_id=1, tool_name="query_sql"),
+        ToolNode(node_id=2, tool_name="search_text_columns"),
         ToolNode(node_id=3, tool_name="Summarize", from_node={"text": 2}, predict_args=False),
     ],
     edges=[
@@ -440,16 +432,42 @@ review_flow = FlowSchema(
     output_type=OutputType.CHAT
 )
 
+plotting_flow = FlowSchema(
+    nodes=[
+        ToolNode(node_id=0, tool_name="ReadSqlite", args={"table_name": "Reviews", "file_path": review_db}, predict_args=False),
+        ToolNode(node_id=1, tool_name="query_sql"),
+        ToolNode(node_id=2, tool_name="PlotDataframe"),
+    ],
+    edges=[
+        Edge(source=0, target=1),
+        Edge(source=1, target=2)
+    ],
+    output_type=OutputType.ARTIFACT
+)
+
+
+email_flow = FlowSchema(
+    nodes=[
+        ToolNode(node_id=0, tool_name="ReadEmail"),
+        ToolNode(node_id=1, tool_name="Summarize", from_node={"text": 0}, predict_args=False),
+    ],
+    edges=[
+        Edge(source=0, target=1)
+    ],
+    output_type=OutputType.CHAT
+)
+
+
 
 shopify_db = "/Users/spartee/Dropbox/Arcade/platform/toolserver/examples/data/olist.sqlite"
 customer_flow = FlowSchema(
     nodes=[
-        ToolNode(node_id=0, tool_name="ReadSqlite", args={"table_name": "customers", "file_path": shopify_db, "output_name": "customers"}, predict_args=False),
-        ToolNode(node_id=1, tool_name="ReadSqlite", args={"table_name": "orders", "file_path": shopify_db, "output_name": "all_customer_orders"}, predict_args=False),
-        ToolNode(node_id=2, input_name="customers", tool_name="query_sql", output_name="customer_data"),
-        ToolNode(node_id=3, input_name="all_customer_orders", tool_name="query_sql", output_name="customer_orders"),
-        ToolNode(node_id=4, input_name="customer_data", tool_name="get"),
-        ToolNode(node_id=5, input_name="customer_orders", tool_name="get"),
+        ToolNode(node_id=0, tool_name="ReadSqlite", args={"table_name": "customers", "file_path": shopify_db}, predict_args=False),
+        ToolNode(node_id=1, tool_name="ReadSqlite", args={"table_name": "orders", "file_path": shopify_db}, predict_args=False),
+        ToolNode(node_id=2, tool_name="query_sql"),
+        ToolNode(node_id=3, tool_name="query_sql"),
+        ToolNode(node_id=4, tool_name="get"),
+        ToolNode(node_id=5, tool_name="get"),
         ToolNode(node_id=6, tool_name="combine_results", from_node={"result_1": 4, "result_2": 5}, predict_args=False),
         ToolNode(node_id=7, tool_name="Summarize", from_node={"text": 6}, predict_args=False)
     ],
@@ -465,6 +483,18 @@ customer_flow = FlowSchema(
     output_type=OutputType.CHAT
 )
 
+
+audio_files = ["/Users/spartee/Desktop/notes.mp3"]
+notetaker = FlowSchema(
+    nodes=[
+        ToolNode(node_id=0, tool_name="TranscribeText", predict_args=False, allow_extra=True),
+        ToolNode(node_id=1, tool_name="Summarize", from_node={"text": 0}, predict_args=False),
+    ],
+    edges=[
+        Edge(source=0, target=1)
+    ],
+    output_type=OutputType.CHAT
+)
 
 
 def print_flow_as_yaml(data: Dict[str, Any]):

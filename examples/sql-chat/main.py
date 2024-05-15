@@ -2,7 +2,7 @@ import openai
 
 oai_key = "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"
 
-
+import base64
 import json
 import logging
 import subprocess
@@ -10,7 +10,6 @@ import sys
 import time
 import traceback
 import os
-
 from typing import Dict, Any
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -21,26 +20,8 @@ from streamlit_chat import message
 import streamlit.components.v1 as components
 from textwrap import dedent
 import plotly.express as px
-from agent import ToolFlow, email_flow, plotting_flow, review_flow, customer_flow
+from agent import ToolFlow, email_flow, plotting_flow, review_flow, customer_flow, notetaker
 
-
-
-PROMPT = dedent("""Given a user query, construct a graph based representation of functions (nodes), and their data flow (edges) such that
-the graph can be executed to supply the user query enough information to answer their query.
-
-You must construct the graph with the following constraints:
-- There can only be 1 source node and 1 sink node.
-- There should be no leaf nodes besides the sink node.
-- The source and sink can be the same node.
-
-Only use the available nodes and their output types as edges. Create unique ids for each node starting from 0.
-
-The available nodes are:
-{nodes}
-
-The available input names for the source are:
-{sources}
-""")
 
 
 def plot_flow(data: Dict[str, Any]):
@@ -86,7 +67,6 @@ def get_agent():
     AnalysisTool = ToolFlow(
         name="data_analysis",
         description="A tool flow for data analysis",
-        prompt=PROMPT,
         model_api_key=oai_key
     )
     return AnalysisTool
@@ -95,7 +75,7 @@ def get_agent():
 # From here down is all the StreamLit UI.
 st.set_page_config(page_title="Arcade AI Demo", page_icon=":robot:", layout="wide")
 
-dropdown_options = ["Gmailer", "PlotBot", "ReviewChat", "CustomerService"]
+dropdown_options = ["Gmailer", "PlotBot", "ReviewChat", "CustomerService", "Notetaker"]
 selected_option = st.sidebar.selectbox("Select an App:", dropdown_options)
 st.sidebar.write(f"Selected App: {selected_option}")
 
@@ -112,6 +92,10 @@ if "past" not in st.session_state:
     st.session_state["past"] = []
 if "generated" not in st.session_state:
     st.session_state["generated"] = []
+if "input" not in st.session_state:
+    st.session_state["input"] = ""
+
+
 
 
 
@@ -121,9 +105,8 @@ st.subheader("Arcade AI Agent Demo")
 chat_container = st.container()
 input_container = st.container()
 
-def submit():
-    submit_text = st.session_state["input"]
-    st.session_state["input"] = ""
+def submit(data=None):
+
     with st.spinner(text="Wait for Agent..."):
         try:
             agent = get_agent()
@@ -137,11 +120,15 @@ def submit():
                 json_flow = review_flow.dict()
             elif selected_option == "CustomerService":
                 json_flow = customer_flow.dict()
+            elif selected_option == "Notetaker":
+                json_flow = notetaker.dict()
             else:
                 st.error("Invalid option selected")
                 return
-
+            print(json_flow)
             plot_flow(json_flow)
+            submit_text = st.session_state.input
+            st.session_state.input = ""
             res = agent.execute_flow(json_flow, submit_text)
         except Exception:
             st.error("Error executing the flow:")
@@ -150,12 +137,35 @@ def submit():
     st.session_state.past.append(submit_text)
     st.session_state.generated.append(res)
 
-def get_text():
-    input_text = st.text_input("You: ", key="input", on_change=submit)
-    return input_text
+
+def run_notetaker():
+    with st.spinner(text="Wait for Agent..."):
+        try:
+            agent = get_agent()
+            json_flow = notetaker.dict()
+            plot_flow(json_flow)
+            audio_file = st.session_state.audio_file
+            if audio_file is None:
+                st.error("No audio file uploaded")
+                return
+
+            audio_file_byte_str = base64.b64encode(audio_file.getvalue()).decode("utf-8")
+            res = agent.execute_flow(json_flow, "placeholder", user_args={"audio_file": audio_file_byte_str})
+        except Exception:
+            st.error("Error executing the flow:")
+            st.error(traceback.format_exc())
+            return
+    st.session_state.past.append("Audio File")
+    st.session_state.generated.append(res)
+
+
 
 with input_container:
-    user_input = get_text()
+    if selected_option != "Notetaker":
+        st.text_input("You: ", key="input", on_change=submit)
+    else:
+        st.file_uploader("Upload an audio file", type=["mp3", "wav", "ogg"], key="audio_file", on_change=run_notetaker)
+
 
 if st.session_state["generated"]:
     with chat_container:
