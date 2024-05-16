@@ -98,17 +98,40 @@ class FlowSchema(BaseModel):
                 node.input_name = incoming_edges[0] if incoming_edges else None
                 node.output_name = outgoing_edges[0] if outgoing_edges else None
 
-class ToolClient:
+class ToolRunner:
 
-    def __init__(self, base_url: str):
+    tool_prompt = dedent("""
+    Given a user query and the schema of the fields in a dataframe, generate the arguments for a tool to execute.
+
+    YOU MUST CALL THE TOOL.
+
+    The schema of the fields in the dataframe is as follows:
+    {schema}
+
+    If needed, the data_id for the source is: {data_id}
+    If needed, the output_name should be: {output_name}
+    """)
+
+    def __init__(self, base_url: str, model: str, api_key: str):
+        """
+        Initialize the ToolRunner with necessary configurations.
+
+        Args:
+            base_url (str): The base URL for the API calls.
+            model (str): The model identifier to be used for queries.
+            api_key (str): The API key for authentication.
+        """
         self.base_url = base_url
         self.client = httpx.Client(timeout=3000)
-        tools, routes = self.__collect_tool_specs()
-        self.tools = tools
-        self.available_tools = routes
+        self.model = model
+        self.openai_client = openai.Client(api_key=api_key)
+        self.tools, self.available_tools = self.__collect_tool_specs()
+        self._data_sources = self.__get_data_sources()
+        self._source = None
+        self._data_schema = None
+        self._data_id = None
 
-
-    def __collect_tool_specs(self) -> Dict[str, str]:
+    def __collect_tool_specs(self) -> Tuple[Dict[str, str], Dict[str, str]]:
         tools_list = self.call_api("GET", "/api/v1/tools/list").get("data", {})
         all_tools = [tool["name"] for tool in tools_list]
         routes = {tool["name"]: tool["endpoint"] for tool in tools_list}
@@ -142,52 +165,14 @@ class ToolClient:
 
     def execute_tool(self, tool_name: str, tool_args: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Executes an tool using the Darkstar Toolserver API and an OpenAI model.
+        Executes a tool using the Darkstar Toolserver API and an OpenAI model.
 
         :param tool_name: The name of the tool to execute.
         :return: The result of the tool
         """
-
-        # Prepare the input message for the OpenAI model
         endpoint = self.available_tools[tool_name]
         result = self.call_api("POST", endpoint, json_data=tool_args)
         return result
-
-
-
-
-class ToolRunner:
-
-    tool_prompt = dedent("""
-    Given a user query and the schema of the fields in a dataframe, generate the arguments for a tool to execute.
-
-    YOU MUST CALL THE TOOL.
-
-    The schema of the fields in the dataframe is as follows:
-    {schema}
-
-    If needed, the data_id for the source is: {data_id}
-    If needed, the output_name should be: {output_name}
-    """)
-
-    def __init__(self, base_url: str, model: str, api_key: str):
-        """
-        Initialize the ToolRunner with necessary configurations.
-
-        Args:
-            base_url (str): The base URL for the API calls.
-            model (str): The model identifier to be used for queries.
-            api_key (str): The API key for authentication.
-        """
-        self._client = ToolClient(base_url)
-
-        self._model = model
-        self._openai_client = openai.Client(api_key=api_key)
-
-        self._data_sources = self.__get_data_sources()
-        self._source = None
-        self._data_schema = None
-        self._data_id = None
 
     def set_source(self, source: str):
         self._data_sources = self.__get_data_sources()
@@ -210,13 +195,13 @@ class ToolRunner:
             raise ValueError(f"Data source '{source}' not found.")
 
         # get the schema
-        schema = self._client.call_api("POST", "/tool/query/get_data_schema", json_data={"data_id": data_id})
+        schema = self.call_api("POST", "/tool/query/get_data_schema", json_data={"data_id": data_id})
         self._source = source
         self._data_schema = schema
         self._data_id = data_id
 
     def __get_data_sources(self) -> Dict[str, Dict[str, str]]:
-        response = self._client.call_api("POST", "/tool/query/list_data_sources")
+        response = self.call_api("POST", "/tool/query/list_data_sources")
         sources = {}
         for _id, source_data in response["data"]["result"].items():
             sources[source_data["file_name"]] = _id
@@ -237,20 +222,20 @@ class ToolRunner:
 
     def get_tool_args(self, tool_name: str, messages: List[Dict[str, str]], output_name: str) -> Dict[str, Any]:
         """
-        Retrieves the required arguments for an tool from the Darkstar Toolserver API and
+        Retrieves the required arguments for a tool from the Darkstar Toolserver API and
         uses them to call an OpenAI model with predefined tools and messages.
 
         :param tool_name: The name of the tool to execute.
         :param messages: A list of messages to provide to the model.
         :return: The result of the OpenAI model call.
         """
-        func_spec = self._client.tools.get(tool_name, {})
+        func_spec = self.tools.get(tool_name, {})
         if not func_spec:
             raise ValueError(f"Tool '{tool_name}' not found in available tools.")
 
         tool = json.loads(func_spec)
         # Call the OpenAI model with the tools and messages
-        completion = self._openai_client.chat.completions.create(
+        completion = self.openai_client.chat.completions.create(
             model="gpt-4-turbo",
             messages=messages,
             tools=[tool],
@@ -278,7 +263,7 @@ class ToolRunner:
 
     def run_tool(self, tool: ToolNode, user_query: str, **kwargs) -> Any:
         """
-        Executes an tool using the Darkstar Toolserver API and an OpenAI model.
+        Executes a tool using the Darkstar Toolserver API and an OpenAI model.
         """
         source = None
         if tool.input_name:
@@ -291,7 +276,6 @@ class ToolRunner:
         else:
             tool_args = kwargs.get("tool_args", {})
 
-        # TODO would something ever have an input_name and not need a data_id?
         if tool.input_name:
             tool_args["data_id"] = self._data_id
 
@@ -302,7 +286,7 @@ class ToolRunner:
             tool_args.update(tool.args)
 
         print("Calling tool with args:", tool_args)
-        result = self._client.execute_tool(tool.tool_name, tool_args)
+        result = self.execute_tool(tool.tool_name, tool_args)
         return result
 
     def get_data_object(self, data_id: int) -> Dict[str, Any]:
@@ -312,10 +296,7 @@ class ToolRunner:
         :param data_id: The ID of the data object to retrieve.
         :return: The data object.
         """
-        return self._client.call_api("GET", f"/api/v1/data/object/{data_id}")["data"]["json_blob"]
-
-
-
+        return self.call_api("GET", f"/api/v1/data/object/{data_id}")["data"]["json_blob"]
 
 class ToolFlow:
 
