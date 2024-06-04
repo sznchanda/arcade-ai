@@ -41,7 +41,7 @@ class ToolSchema(BaseModel):
 class ToolCatalog:
     def __init__(self, tools_dir: str = settings.TOOLS_DIR):
         self.tools = self.read_tools(tools_dir)
-        self.tools.update(self.__get_builitin_tools())
+        #self.tools.update(self.__get_builitin_tools())
 
     @staticmethod
     def read_tools(directory: str) -> List[ToolSchema]:

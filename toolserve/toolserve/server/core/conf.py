@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     OPERA_LOG_ENCRYPT_SECRET_KEY: str  # 密钥 os.urandom(32), 需使用 bytes.hex() 方法转换为 str
 
     # FastAPI
-    API_V1_STR: str = '/api/v1'
+    API_V1_STR: str = '/v1'
     API_ACTION_STR: str = '/tool'
     TITLE: str = 'Arcade AI Toolserver'
     VERSION: str = '0.1.0'

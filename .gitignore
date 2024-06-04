@@ -8,3 +8,6 @@ backend/app/alembic/versions/
 backend/app/static/media/
 .ruff_cache/
 .pytest_cache/
+examples/data
+examples/set_secrets.sh
+scratch
