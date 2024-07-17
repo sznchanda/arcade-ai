@@ -1,8 +1,8 @@
 import pytest
 
-from arcade.sdk.errors import ToolDefinitionError
 from arcade.sdk.tool import tool
 from arcade.tool.catalog import ToolCatalog
+from arcade.tool.errors import ToolDefinitionError
 
 
 @tool
@@ -13,6 +13,11 @@ def func_with_missing_description():
 @tool(desc="Returning function with declared no return type (illegal)")
 def func_with_missing_return_type():
     return "hello world"
+
+
+@tool(desc="A function with a parameter type (illegal)")
+def func_with_missing_param_type(param1):
+    pass
 
 
 @tool(desc="A function with a parameter missing a description (illegal)")
@@ -37,6 +42,11 @@ def func_with_unsupported_param(param1: complex):
             func_with_missing_return_type,
             ToolDefinitionError,
             id=func_with_missing_return_type.__name__,
+        ),
+        pytest.param(
+            func_with_missing_param_type,
+            ToolDefinitionError,
+            id=func_with_missing_param_type.__name__,
         ),
         pytest.param(
             func_with_missing_param_description,

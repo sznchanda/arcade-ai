@@ -1,39 +1,64 @@
 import traceback
-from textwrap import dedent
+from typing import Callable
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Body, Depends, Request
 from pydantic import BaseModel, ValidationError
 
-from arcade.actor.common.response import response_base
-from arcade.actor.common.response_code import CustomResponseCode
 from arcade.actor.core.conf import settings
-from arcade.tool.catalog import ToolDefinition
-from arcade.utils import snake_to_pascal_case
+from arcade.tool.catalog import MaterializedTool
+from arcade.tool.executor import ToolExecutor
+from arcade.tool.response import ToolResponse, tool_response
 
 
-def create_endpoint_function(name, description, func, input_model, output_model):
+def create_endpoint_function(
+    name: str,
+    description: str,
+    func: Callable,
+    input_model: type[BaseModel],
+    output_model: type[BaseModel],
+) -> Callable[..., ToolResponse]:
     """
     Factory function to create endpoint functions with 'frozen' schema and input_model values.
     """
 
-    async def run(body: input_model):
+    # dummy function to signal the parameters should be in the
+    # body of the request
+    def get_input_model(inputs: BaseModel = Body(...)) -> BaseModel:
+        return inputs
+
+    async def run(request: Request, inputs: BaseModel = Depends(get_input_model)) -> ToolResponse:
+        """
+        The function that will be executed when a user sends a POST request
+        to a tool endpoint
+        """
         try:
-            # Execute the action
-            result = await func(**body.dict())
-            return await response_base.success(data={"result": result})
+            # get the body of the request without parsing and validating it
+            # as the executor will do that
+            body = await request.json()
+            response = await ToolExecutor.run(func, input_model, output_model, **body)
+
+        # TODO: Does this catch validation errors on output?
         except ValidationError as e:
-            return await response_base.error(res=CustomResponseCode.HTTP_400, msg=str(e))
+            return await tool_response.fail(msg=str(e))
+
         except Exception as e:
-            print(traceback.format_exc())
-            return await response_base.error(res=CustomResponseCode.HTTP_500, msg=str(e))
+            return await tool_response.fail(
+                msg=str(e),
+                data=traceback.format_exc(),
+            )
+        return response
 
     run.__name__ = name
     run.__doc__ = description
 
-    return run
+    # TODO investigate this
+    return run  # type: ignore[return-value]
 
 
-def generate_endpoint(schemas: list[ToolDefinition]) -> APIRouter:
+def generate_endpoint(schemas: list[MaterializedTool]) -> APIRouter:
+    """
+    Generate a HTTP endpoint for each tool definition passed.
+    """
     routers = []
     top_level_router = APIRouter(prefix=settings.API_ACTION_STR)
 
@@ -44,7 +69,7 @@ def generate_endpoint(schemas: list[ToolDefinition]) -> APIRouter:
 
         # Create the endpoint function
         run = create_endpoint_function(
-            name=snake_to_pascal_case(define.name),
+            name=define.name,
             description=define.description,
             func=schema.tool,
             input_model=schema.input_model,
@@ -53,33 +78,17 @@ def generate_endpoint(schemas: list[ToolDefinition]) -> APIRouter:
 
         # Add the endpoint to the FastAPI app
         router.post(
-            f"/{snake_to_pascal_case(define.name)}",
-            name=snake_to_pascal_case(define.name),
+            f"/{define.name}",  # Note: Names from the ToolCatalog are already in PascalCase
+            name=define.name,
             summary=define.description,
             tags=[schema.meta.module],
-            response_model=schema.output_model,
+            # TODO investigate this
+            response_model=ToolResponse[schema.output_model],  # type: ignore[name-defined]
             response_model_exclude_unset=True,
             response_model_exclude_none=True,
-            response_description=create_output_description(schema.output_model),
         )(run)
 
         routers.append(router)
     for router in routers:
         top_level_router.include_router(router)
     return top_level_router
-
-
-def create_output_description(output_model: type[BaseModel]) -> str:
-    """
-    Create a description string for the output model.
-    """
-    if not output_model:
-        return None
-
-    output_description = dedent(output_model.__doc__ or "")
-    output_description += "\n\n**Attributes:**\n\n"
-
-    for name, field in output_model.model_fields.items():
-        output_description += f"- **{name}** ({field.annotation.__name__})\n"
-
-    return output_description

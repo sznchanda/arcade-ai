@@ -1,11 +1,14 @@
 import asyncio
 import inspect
 import sys
+from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import datetime
 from importlib import import_module
 from pathlib import Path
 from typing import (
     Annotated,
+    Any,
     Callable,
     Literal,
     Optional,
@@ -16,14 +19,14 @@ from typing import (
 )
 
 from pydantic import BaseModel, Field, create_model
+from pydantic.fields import FieldInfo
+from pydantic_core import PydanticUndefined
 
-from arcade.actor.common.response import ResponseModel
-from arcade.actor.common.response_code import CustomResponseCode
 from arcade.actor.core.conf import settings
 from arcade.apm.base import ToolPack
 from arcade.sdk.annotations import Inferrable
-from arcade.sdk.errors import ToolDefinitionError
-from arcade.sdk.schemas import (
+from arcade.tool.errors import ToolDefinitionError
+from arcade.tool.schemas import (
     InputParameter,
     ToolDefinition,
     ToolInputs,
@@ -38,8 +41,14 @@ from arcade.utils import (
     snake_to_pascal_case,
 )
 
+WireType = Literal["string", "integer", "float", "boolean", "json"]
+
 
 class ToolMeta(BaseModel):
+    """
+    Metadata for a tool once it's been materialized.
+    """
+
     module: str
     path: Optional[str] = None
     date_added: datetime = Field(default_factory=datetime.now)
@@ -47,6 +56,10 @@ class ToolMeta(BaseModel):
 
 
 class MaterializedTool(BaseModel):
+    """
+    Data structure that holds tool information while stored in the Catalog
+    """
+
     tool: Callable
     definition: ToolDefinition
     meta: ToolMeta
@@ -68,12 +81,21 @@ class MaterializedTool(BaseModel):
         return self.definition.description
 
 
+# TODO make a generate for catalog type
+
+
 class ToolCatalog:
-    def __init__(self, tools_dir: str = settings.TOOLS_DIR):
-        self.tools = self.read_tools(tools_dir)
+    """Singleton class that holds all tools for a given actor"""
+
+    def __init__(self, tools_dir: Path = settings.TOOLS_DIR):
+        self.tools: dict[str, MaterializedTool] = self.read_tools(tools_dir)
 
     @staticmethod
-    def read_tools(directory: str) -> dict[str, MaterializedTool]:
+    def read_tools(directory: Path) -> dict[str, MaterializedTool]:
+        """
+        Create tool definitions from a directory of python files
+        """
+
         toolpack = ToolPack.from_lock_file(directory)
         sys.path.append(str(Path(directory).resolve() / "tools"))
 
@@ -85,9 +107,7 @@ class ToolCatalog:
             module = import_module(module_name)
             tool_func = getattr(module, func_name)
             input_model, output_model = create_func_models(tool_func)
-            tool_name = snake_to_pascal_case(
-                name
-            )  # TODO make sure this follows create_tool_definition
+            tool_name = name
             tools[tool_name] = MaterializedTool(
                 definition=ToolCatalog.create_tool_definition(tool_func, version),
                 tool=tool_func,
@@ -100,6 +120,10 @@ class ToolCatalog:
 
     @staticmethod
     def create_tool_definition(tool: Callable, version: str) -> ToolDefinition:
+        """
+        Given a tool function, create a ToolDefinition
+        """
+
         tool_name = getattr(tool, "__tool_name__", tool.__name__)
 
         # Hard requirement: tools must have descriptions
@@ -122,18 +146,18 @@ class ToolCatalog:
             ),
         )
 
-    def __getitem__(self, name: str) -> Optional[MaterializedTool]:
+    def __getitem__(self, name: str) -> MaterializedTool:
         # TODO error handling
         for tool_name, tool in self.tools.items():
             if tool_name == name:
                 return tool
-        return None
+        raise KeyError(f"Tool {name} not found.")
 
-    def __iter__(self) -> MaterializedTool:
+    def __iter__(self) -> Iterator[MaterializedTool]:
         yield from self.tools.values()
 
     def get_tool(self, name: str) -> Optional[Callable]:
-        for _, tool in self:
+        for tool in self.tools.values():
             if tool.definition.name == name:
                 return tool.tool
         raise ValueError(f"Tool {name} not found.")
@@ -159,31 +183,29 @@ def create_input_definition(func: Callable) -> ToolInputs:
     """
     input_parameters = []
     for _, param in inspect.signature(func, follow_wrapped=True).parameters.items():
-        field_info = extract_field_info(param)
-
-        # Hard requirement: params must be described
-        if field_info["field_params"]["description"] is None:
-            raise ToolDefinitionError(
-                f"Parameter {field_info['field_params']['name']} is missing a description"
-            )
+        tool_field_info = extract_field_info(param)
 
         is_enum = False
         enum_values: list[str] = []
 
         # Special case: Literal["string1", "string2"] can be enumerated on the wire
-        if is_string_literal(field_info["field_params"]["type"]):
+        if is_string_literal(tool_field_info.field_type):
             is_enum = True
-            enum_values = [str(e) for e in get_args(field_info["field_params"]["type"])]
+            enum_values = [str(e) for e in get_args(tool_field_info.field_type)]
+
+        # If the field has a default value, it is not required
+        # If the field is optional, it is not required
+        has_default_value = tool_field_info.default is not None
+        is_required = not tool_field_info.is_optional and not has_default_value
 
         input_parameters.append(
             InputParameter(
-                name=field_info["field_params"]["name"],
-                description=field_info["field_params"]["description"],
-                required=field_info["field_params"]["default"] is None
-                and not field_info["field_params"]["optional"],
-                inferrable=field_info["field_params"]["inferrable"],
+                name=tool_field_info.name,
+                description=tool_field_info.description,
+                required=is_required,
+                inferrable=tool_field_info.is_inferrable,
                 value_schema=ValueSchema(
-                    val_type=field_info["field_params"]["wire_type"],
+                    val_type=tool_field_info.wire_type,
                     enum=enum_values if is_enum else None,
                 ),
             )
@@ -230,38 +252,108 @@ def create_output_definition(func: Callable) -> ToolOutput:
     )
 
 
-def extract_field_info(param: inspect.Parameter) -> dict:
+@dataclass
+class ParamInfo:
+    """
+    Information about a function parameter found through inspection.
+    """
+
+    name: str
+    default: Any
+    original_type: type
+    field_type: type
+    description: str | None = None
+    is_optional: bool = True
+
+
+@dataclass
+class ToolParamInfo:
+    """
+    Information about a tool parameter, including computed values.
+    """
+
+    name: str
+    default: Any
+    original_type: type
+    field_type: type
+    wire_type: WireType
+    description: str | None = None
+    is_optional: bool = True
+    is_inferrable: bool = True
+
+    @classmethod
+    def from_param_info(
+        cls, param_info: ParamInfo, wire_type: WireType, is_inferrable: bool = True
+    ) -> "ToolParamInfo":
+        return cls(
+            name=param_info.name,
+            default=param_info.default,
+            original_type=param_info.original_type,
+            field_type=param_info.field_type,
+            description=param_info.description,
+            is_optional=param_info.is_optional,
+            wire_type=wire_type,
+            is_inferrable=is_inferrable,
+        )
+
+
+def extract_field_info(param: inspect.Parameter) -> ToolParamInfo:
     """
     Extract type and field parameters from a function parameter.
-
-    Args:
-        param (inspect.Parameter): The parameter to extract information from.
-
-    Returns:
-        dict: A dictionary with 'type' and 'field_params'.
     """
     annotation = param.annotation
     if annotation == inspect.Parameter.empty:
-        raise TypeError(f"Parameter {param} has no type annotation.")
+        raise ToolDefinitionError(f"Parameter {param} has no type annotation.")
+
+    # Get the majority of the param info from either the Pydantic Field() or regular inspection
+    if isinstance(param.default, FieldInfo):
+        param_info = extract_pydantic_param_info(param)
+    else:
+        param_info = extract_regular_param_info(param)
 
     metadata = getattr(annotation, "__metadata__", [])
-
-    name = param.name
-    description = None
-
     str_annotations = [m for m in metadata if isinstance(m, str)]
-    if len(str_annotations) == 1:
-        description = str_annotations[0]
+
+    # Get the description from annotations, if present
+    if len(str_annotations) == 0:
+        pass
+    elif len(str_annotations) == 1:
+        param_info.description = str_annotations[0]
     elif len(str_annotations) == 2:
-        name = str_annotations[0]
-        description = str_annotations[1]
+        param_info.name = str_annotations[0]
+        param_info.description = str_annotations[1]
     else:
-        raise ToolDefinitionError(f"Parameter {param} has multiple descriptions")
+        raise ToolDefinitionError(
+            f"Parameter {param} has too many string annotations. Expected 0, 1, or 2, got {len(str_annotations)}."
+        )
 
-    default = param.default if param.default is not inspect.Parameter.empty else None
+    # Get the Inferrable annotation, if it exists
+    inferrable_annotation = first_or_none(Inferrable, get_args(annotation))
 
-    # If the param is Annotated[], unwrap the annotation
+    # Params are inferrable by default
+    is_inferrable = inferrable_annotation.value if inferrable_annotation else True
+
+    # Get the wire type
+    wire_type = (
+        get_wire_type(str)
+        if is_string_literal(param_info.field_type)
+        else get_wire_type(param_info.field_type)
+    )
+
+    # Final reality check
+    if param_info.description is None:
+        raise ToolDefinitionError(f"Parameter {param_info.name} is missing a description")
+
+    if wire_type is None:
+        raise ToolDefinitionError(f"Unknown parameter type: {param_info.field_type}")
+
+    return ToolParamInfo.from_param_info(param_info, wire_type, is_inferrable)
+
+
+def extract_regular_param_info(param: inspect.Parameter) -> ParamInfo:
+    # If the param is Annotated[], unwrap the annotation to get the "real" type
     # Otherwise, use the literal type
+    annotation = param.annotation
     original_type = annotation.__args__[0] if get_origin(annotation) is Annotated else annotation
     field_type = original_type
 
@@ -271,30 +363,55 @@ def extract_field_info(param: inspect.Parameter) -> dict:
         field_type = next(arg for arg in get_args(field_type) if arg is not type(None))
         is_optional = True
 
-    wire_type = get_wire_type(str) if is_string_literal(field_type) else get_wire_type(field_type)
+    return ParamInfo(
+        name=param.name,
+        default=param.default if param.default is not inspect.Parameter.empty else None,
+        is_optional=is_optional,
+        original_type=original_type,
+        field_type=field_type,
+    )
 
-    # Get the Inferrable annotation, if it exists
-    inferrable_annotation = first_or_none(Inferrable, get_args(annotation))
 
-    field_params = {
-        "name": name,
-        "description": str(description) if description else None,
-        "default": default,
-        "optional": is_optional,
-        "inferrable": inferrable_annotation.value
-        if inferrable_annotation
-        else True,  # Params are inferrable by default
-        "type": field_type,
-        "wire_type": wire_type,
-        "original_type": original_type,
-    }
+def extract_pydantic_param_info(param: inspect.Parameter) -> ParamInfo:
+    default_value = None if param.default.default is PydanticUndefined else param.default.default
 
-    return {"type": field_type, "field_params": field_params}
+    if param.default.default_factory is not None:
+        if callable(param.default.default_factory):
+            default_value = param.default.default_factory()
+        else:
+            raise ToolDefinitionError(f"Default factory for parameter {param} is not callable.")
+
+    # If the param is Annotated[], unwrap the annotation to get the "real" type
+    # Otherwise, use the literal type
+    original_type = (
+        param.annotation.__args__[0]
+        if get_origin(param.annotation) is Annotated
+        else param.annotation
+    )
+    field_type = original_type
+
+    # Unwrap Optional types
+    is_optional = False
+    if get_origin(field_type) is Union and type(None) in get_args(field_type):
+        field_type = next(arg for arg in get_args(field_type) if arg is not type(None))
+        is_optional = True
+
+    return ParamInfo(
+        name=param.name,
+        description=param.default.description,
+        default=default_value,
+        is_optional=is_optional,
+        original_type=original_type,
+        field_type=field_type,
+    )
 
 
 def get_wire_type(
     _type: type,
-) -> Literal["string", "integer", "float", "boolean", "json"]:
+) -> WireType:
+    """
+    Mapping between Python types and HTTP/JSON types
+    """
     type_mapping = {
         str: "string",
         bool: "boolean",
@@ -315,19 +432,12 @@ def get_wire_type(
             return "json"
     elif issubclass(_type, BaseModel):
         return "json"
-    else:
-        raise TypeError(f"Unsupported parameter type: {_type}")
+    raise ToolDefinitionError(f"Unsupported parameter type: {_type}")
 
 
 def create_func_models(func: Callable) -> tuple[type[BaseModel], type[BaseModel]]:
     """
     Analyze a function to create corresponding Pydantic models for its input and output.
-
-    Args:
-        func (Callable): The function to analyze.
-
-    Returns:
-        Tuple[Type[BaseModel], Type[BaseModel]]: A tuple containing the input and output Pydantic models.
     """
     input_fields = {}
     # TODO figure this out (Sam)
@@ -335,16 +445,15 @@ def create_func_models(func: Callable) -> tuple[type[BaseModel], type[BaseModel]
         func = func.__wrapped__
     for name, param in inspect.signature(func, follow_wrapped=True).parameters.items():
         # TODO make this cleaner
-        field_info = extract_field_info(param)
-        field_data = field_info["field_params"]
+        tool_field_info = extract_field_info(param)
         param_fields = {
-            "default": field_data["default"],
-            "description": field_data["description"],
+            "default": tool_field_info.default,
+            "description": tool_field_info.description,
             # TODO more here?
         }
-        input_fields[name] = (field_info["type"], Field(**param_fields))
+        input_fields[name] = (tool_field_info.field_type, Field(**param_fields))
 
-    input_model = create_model(f"{snake_to_pascal_case(func.__name__)}Input", **input_fields)
+    input_model = create_model(f"{snake_to_pascal_case(func.__name__)}Input", **input_fields)  # type: ignore[call-overload]
 
     output_model = determine_output_model(func)
 
@@ -354,12 +463,6 @@ def create_func_models(func: Callable) -> tuple[type[BaseModel], type[BaseModel]
 def determine_output_model(func: Callable) -> type[BaseModel]:
     """
     Determine the output model for a function based on its return annotation.
-
-    Args:
-        func (Callable): The function to analyze.
-
-    Returns:
-        Type[BaseModel]: A Pydantic model representing the output.
     """
     return_annotation = inspect.signature(func).return_annotation
     output_model_name = f"{snake_to_pascal_case(func.__name__)}Output"
@@ -367,7 +470,7 @@ def determine_output_model(func: Callable) -> type[BaseModel]:
         return create_model(output_model_name)
     elif hasattr(return_annotation, "__origin__"):
         if hasattr(return_annotation, "__metadata__"):
-            field_type = Optional[return_annotation.__args__[0]]
+            field_type = return_annotation.__args__[0]
             description = (
                 return_annotation.__metadata__[0] if return_annotation.__metadata__ else ""
             )
@@ -376,32 +479,18 @@ def determine_output_model(func: Callable) -> type[BaseModel]:
                     output_model_name,
                     result=(field_type, Field(description=str(description))),
                 )
-        else:
-            return create_model(
-                output_model_name,
-                result=(
-                    return_annotation,
-                    Field(description="No description provided."),
-                ),
-            )
+        # when the return_annotation has an __origin__ attribute
+        # and does not have a __metadata__ attribute.
+        return create_model(
+            output_model_name,
+            result=(
+                return_annotation,
+                Field(description="No description provided."),
+            ),
+        )
     else:
         # Handle simple return types (like str)
         return create_model(
             output_model_name,
             result=(return_annotation, Field(description="No description provided.")),
         )
-
-
-def create_response_model(name: str, output_model: type[BaseModel]) -> type[ResponseModel]:
-    """
-    Create a response model for the given schema.
-    """
-    # Create a new response model
-    response_model = create_model(
-        f"{snake_to_pascal_case(name)}Response",
-        code=(int, CustomResponseCode.HTTP_200.code),
-        msg=(str, CustomResponseCode.HTTP_200.msg),
-        data=(Optional[output_model], None),
-    )
-
-    return response_model

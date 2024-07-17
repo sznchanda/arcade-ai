@@ -3,7 +3,9 @@ from typing import Annotated, Literal, Optional
 import pytest
 
 from arcade.sdk.annotations import Inferrable
-from arcade.sdk.schemas import (
+from arcade.sdk.tool import tool
+from arcade.tool.catalog import ToolCatalog
+from arcade.tool.schemas import (
     InputParameter,
     OAuth2AuthorizationRequirement,
     ToolInputs,
@@ -11,8 +13,6 @@ from arcade.sdk.schemas import (
     ToolRequirements,
     ValueSchema,
 )
-from arcade.sdk.tool import tool
-from arcade.tool.catalog import ToolCatalog
 
 
 ### Tests on @tool decorator
@@ -86,6 +86,20 @@ def func_with_param_with_default(param1: Annotated[str, "First param"] = "defaul
 
 @tool(desc="A function with an optional input parameter")
 def func_with_optional_param(param1: Annotated[Optional[str], "First param"]):
+    pass
+
+
+@tool(desc="A function with an optional input parameter (default: None)")
+def func_with_optional_param_with_default_None(
+    param1: Annotated[Optional[str], "First param"] = None,
+):
+    pass
+
+
+@tool(desc="A function with an optional input parameter with default value")
+def func_with_optional_param_with_default_value(
+    param1: Annotated[Optional[str], "First param"] = "default",
+):
     pass
 
 
@@ -340,6 +354,46 @@ def func_with_complex_return() -> list[dict[str, str]]:
                 ),
             },
             id="func_with_optional_param",
+        ),
+        pytest.param(
+            func_with_optional_param_with_default_None,
+            {
+                "inputs": ToolInputs(
+                    parameters=[
+                        InputParameter(
+                            name="param1",
+                            description="First param",
+                            inferrable=True,
+                            required=False,  # Because of Optional[str]
+                            value_schema=ValueSchema(val_type="string", enum=None),
+                        )
+                    ]
+                ),
+                "output": ToolOutput(
+                    available_modes=["null"], description="No description provided."
+                ),
+            },
+            id="func_with_optional_param_with_default_None",
+        ),
+        pytest.param(
+            func_with_optional_param_with_default_value,
+            {
+                "inputs": ToolInputs(
+                    parameters=[
+                        InputParameter(
+                            name="param1",
+                            description="First param",
+                            inferrable=True,
+                            required=False,  # Because of Optional[str] and default value
+                            value_schema=ValueSchema(val_type="string", enum=None),
+                        )
+                    ]
+                ),
+                "output": ToolOutput(
+                    available_modes=["null"], description="No description provided."
+                ),
+            },
+            id="func_with_optional_param_with_default_value",
         ),
         pytest.param(
             func_with_mixed_params,
