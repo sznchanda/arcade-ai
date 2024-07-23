@@ -1,8 +1,9 @@
+import inspect
 import os
 from typing import Any, Callable, Optional, TypeVar, Union
 
-from arcade.tool.schemas import ToolAuthorizationRequirement
-from arcade.utils import snake_to_pascal_case
+from arcade.core.tool import ToolAuthorizationRequirement
+from arcade.core.utils import snake_to_pascal_case
 
 T = TypeVar("T")
 
@@ -19,7 +20,7 @@ def tool(
         tool_name = name or snake_to_pascal_case(func_name)
 
         setattr(func, "__tool_name__", tool_name)  # noqa: B010 (Do not call `setattr` with a constant attribute value)
-        setattr(func, "__tool_description__", desc or func.__doc__)  # noqa: B010
+        setattr(func, "__tool_description__", desc or inspect.cleandoc(func.__doc__ or ""))  # noqa: B010
         setattr(func, "__tool_requires_auth__", requires_auth)  # noqa: B010
 
         return func

@@ -2,10 +2,8 @@ from typing import Annotated, Literal, Optional
 
 import pytest
 
-from arcade.sdk.annotations import Inferrable
-from arcade.sdk.tool import tool
-from arcade.tool.catalog import ToolCatalog
-from arcade.tool.schemas import (
+from arcade.core.catalog import ToolCatalog
+from arcade.core.tool import (
     InputParameter,
     OAuth2AuthorizationRequirement,
     ToolInputs,
@@ -13,6 +11,8 @@ from arcade.tool.schemas import (
     ToolRequirements,
     ValueSchema,
 )
+from arcade.sdk.annotations import Inferrable
+from arcade.sdk.tool import tool
 
 
 ### Tests on @tool decorator
@@ -24,6 +24,15 @@ def func_with_description():
 @tool
 def func_with_docstring_description():
     """Docstring description"""
+    pass
+
+
+@tool
+def func_with_multiline_docstring_description():
+    """
+    Docstring description
+    on multiple lines
+    """
     pass
 
 
@@ -162,6 +171,11 @@ def func_with_complex_return() -> list[dict[str, str]]:
             func_with_docstring_description,
             {"description": "Docstring description"},
             id="func_with_docstring_description",
+        ),
+        pytest.param(
+            func_with_multiline_docstring_description,
+            {"description": "Docstring description\non multiple lines"},
+            id="func_with_multiline_docstring_description",
         ),
         pytest.param(
             func_with_name_and_description,
