@@ -3,15 +3,16 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Callable
 
-from arcade.actor.schema import (
-    InvokeToolRequest,
-    InvokeToolResponse,
-    ToolOutput,
-    ToolOutputError,
-)
 from arcade.core.catalog import ToolCatalog, Toolkit
 from arcade.core.executor import ToolExecutor
-from arcade.core.tool import ToolDefinition
+from arcade.core.schema import (
+    InvokeToolError,
+    InvokeToolOutput,
+    InvokeToolRequest,
+    InvokeToolResponse,
+    ToolContext,
+    ToolDefinition,
+)
 
 
 class ActorComponent(ABC):
@@ -72,15 +73,17 @@ class BaseActor:
 
         response = await ToolExecutor.run(
             func=materialized_tool.tool,
+            definition=materialized_tool.definition,
             input_model=materialized_tool.input_model,
             output_model=materialized_tool.output_model,
+            context=tool_request.context or ToolContext(),
             **tool_request.inputs or {},
         )
         if response.code == 200:
             # TODO remove ignore
-            output = ToolOutput(value=response.data.result)  # type: ignore[union-attr]
+            output = InvokeToolOutput(value=response.data.result)  # type: ignore[union-attr]
         else:
-            output = ToolOutput(error=ToolOutputError(message=response.msg))
+            output = InvokeToolOutput(error=InvokeToolError(message=response.msg))
 
         end_time = time.time()  # End time in seconds
         duration_ms = (end_time - start_time) * 1000  # Convert to milliseconds
