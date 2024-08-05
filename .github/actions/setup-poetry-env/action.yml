@@ -2,10 +2,10 @@ name: "setup-poetry-env"
 description: "Composite action to setup the Python and poetry environment."
 
 inputs:
-   python-version:
-     required: false
-     description: "The python version to use"
-     default: "3.11"
+  python-version:
+    required: false
+    description: "The python version to use"
+    default: "3.11"
 
 runs:
   using: "composite"
@@ -29,5 +29,5 @@ runs:
 
     - name: Install dependencies
       if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-      run: cd arcade && poetry install --no-interaction
+      run: cd arcade && poetry install --no-interaction --all-extras
       shell: bash

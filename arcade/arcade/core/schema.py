@@ -120,8 +120,8 @@ class ToolContext(BaseModel):
     """The authorization context for the tool invocation that requires authorization."""
 
 
-class InvokeToolRequest(BaseModel):
-    """The request to invoke a tool."""
+class ToolCallRequest(BaseModel):
+    """The request to call (invoke) a tool."""
 
     run_id: str
     """The globally-unique run ID provided by the Engine."""
@@ -137,7 +137,7 @@ class InvokeToolRequest(BaseModel):
     """The context for the tool invocation."""
 
 
-class InvokeToolError(BaseModel):
+class ToolCallError(BaseModel):
     """The error that occurred during the tool invocation."""
 
     message: str
@@ -146,12 +146,12 @@ class InvokeToolError(BaseModel):
     """The developer-facing error details."""
 
 
-class InvokeToolOutput(BaseModel):
+class ToolCallOutput(BaseModel):
     """The output of a tool invocation."""
 
     value: Union[str, int, float, bool, dict] | None = None
     """The value returned by the tool."""
-    error: InvokeToolError | None = None
+    error: ToolCallError | None = None
     """The error that occurred during the tool invocation."""
 
     model_config = {
@@ -166,7 +166,7 @@ class InvokeToolOutput(BaseModel):
     }
 
 
-class InvokeToolResponse(BaseModel):
+class ToolCallResponse(BaseModel):
     """The response to a tool invocation."""
 
     invocation_id: str
@@ -177,5 +177,5 @@ class InvokeToolResponse(BaseModel):
     """The duration of the tool invocation in milliseconds (ms)."""
     success: bool
     """Whether the tool invocation was successful."""
-    output: InvokeToolOutput | None = None
+    output: ToolCallOutput | None = None
     """The output of the tool invocation."""

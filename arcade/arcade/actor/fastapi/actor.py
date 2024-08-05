@@ -1,12 +1,21 @@
-import asyncio
+import json
 from typing import Any, Callable
 
 from fastapi import FastAPI, Request
 
-from arcade.actor.core.base import BaseActor
+from arcade.actor.core.base import (
+    BaseActor,
+    Router,
+)
+from arcade.actor.core.common import RequestData
+from arcade.actor.utils import is_async_callable
 
 
 class FastAPIActor(BaseActor):
+    """
+    An Arcade Actor that is hosted inside a FastAPI app.
+    """
+
     def __init__(self, app: FastAPI) -> None:
         """
         Initialize the FastAPIActor with a FastAPI app
@@ -18,28 +27,12 @@ class FastAPIActor(BaseActor):
         self.register_routes(self.router)
 
 
-class FastAPIRouter:  # TODO create an interface for this
+class FastAPIRouter(Router):
     def __init__(self, app: FastAPI, actor: BaseActor) -> None:
         self.app = app
         self.actor = actor
 
-    def add_route(self, path: str, handler: Callable, methods: str) -> None:
-        """
-        Add a route to the FastAPI application.
-        """
-        for method in methods:
-            if method == "GET":
-                self.app.get(path)(self.wrap_handler(handler))
-            elif method == "POST":
-                self.app.post(path)(self.wrap_handler(handler))
-            elif method == "PUT":
-                self.app.put(path)(self.wrap_handler(handler))
-            elif method == "DELETE":
-                self.app.delete(path)(self.wrap_handler(handler))
-            else:
-                raise ValueError(f"Unsupported HTTP method: {method}")
-
-    def wrap_handler(self, handler: Callable) -> Callable:
+    def _wrap_handler(self, handler: Callable) -> Callable:
         """
         Wrap the handler to handle FastAPI-specific request and response.
         """
@@ -48,11 +41,25 @@ class FastAPIRouter:  # TODO create an interface for this
             request: Request,
             # api_key: str = Depends(get_api_key), # TODO re-enable when Engine supports auth
         ) -> Any:
-            if asyncio.iscoroutinefunction(handler) or (
-                callable(handler) and asyncio.iscoroutinefunction(handler.__call__)  # type: ignore[operator]
-            ):
-                return await handler(request)
+            body_str = await request.body()
+            body_json = json.loads(body_str) if body_str else {}
+            request_data = RequestData(
+                path=request.url.path,
+                method=request.method,
+                body_json=body_json,
+            )
+
+            if is_async_callable(handler):
+                return await handler(request_data)
             else:
-                return handler(request)
+                return handler(request_data)
 
         return wrapped_handler
+
+    def add_route(self, endpoint_path: str, handler: Callable, method: str) -> None:
+        """
+        Add a route to the FastAPI application.
+        """
+        self.app.add_api_route(
+            f"{self.actor.base_path}/{endpoint_path}", self._wrap_handler(handler), methods=[method]
+        )

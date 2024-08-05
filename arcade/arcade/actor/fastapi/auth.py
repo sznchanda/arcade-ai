@@ -9,7 +9,6 @@ security = HTTPBearer()  # Authorization: Bearer <xxx>
 
 
 # Dependency function to validate JWT and extract API key
-# The validator function is provided by the BaseActor class
 async def get_api_key(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> str:
