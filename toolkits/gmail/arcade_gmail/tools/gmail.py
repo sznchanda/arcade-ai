@@ -8,12 +8,11 @@ from googleapiclient.discovery import build
 
 from arcade.core.schema import ToolContext
 from arcade.sdk import tool
-from arcade.sdk.auth import OAuth2
+from arcade.sdk.auth import Google
 
 
 @tool(
-    requires_auth=OAuth2(
-        authority="https://accounts.google.com",
+    requires_auth=Google(
         scope=["https://www.googleapis.com/auth/gmail.readonly"],
     )
 )
