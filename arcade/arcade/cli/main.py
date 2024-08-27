@@ -15,7 +15,7 @@ from typer.models import Context
 from arcade.core.catalog import ToolCatalog
 from arcade.core.client import EngineClient
 from arcade.core.config import Config
-from arcade.core.schema import ToolContext
+from arcade.core.schema import ToolCallOutput, ToolContext
 from arcade.core.toolkit import Toolkit
 
 
@@ -145,7 +145,7 @@ def run(
             console.print(f"Calling tool: {tool_name} with params: {parameters}", style="bold blue")
 
             # TODO async.gather instead of loop.
-            output = asyncio.run(
+            output: ToolCallOutput = asyncio.run(
                 ToolExecutor.run(
                     called_tool.tool,
                     called_tool.definition,
@@ -155,22 +155,20 @@ def run(
                     **parameters,
                 )
             )
-            if output.code != 200:
-                console.print(output.msg, style="bold red")
-                if output.data:
-                    console.print(output.data.result, style="bold red")
-                    typer.Exit(code=1)
+            if output.error:
+                console.print(output.error.message, style="bold red")
+                typer.Exit(code=1)
             else:
                 messages += [
                     {
                         "role": "assistant",
                         # TODO: escape the output and ensure serialization works
-                        "content": f"Results of Tool {tool_name}: {output.data.result!s}",  # type: ignore[union-attr]
+                        "content": f"Results of Tool {tool_name}: {output.value!s}",
                     },
                 ]
 
         if choice == "execute":
-            console.print(output.data.result, style="green")  # type: ignore[union-attr]
+            console.print(output.value, style="green")
             raise typer.Exit(0)
         else:
             if stream:
@@ -206,9 +204,18 @@ def chat(
 
     client = EngineClient(base_url=config.engine_url)
 
+    if config.user and config.user.email:
+        user_email = config.user.email
+        user_attribution = f"({user_email})"
+    else:
+        console.print(
+            "❌ User email not found in configuration. Please run `arcade login`.", style="bold red"
+        )
+        typer.Exit(code=1)
+
     try:
         # start messages conversation
-        messages = []
+        messages: list[dict[str, Any]] = []
 
         chat_header = Text.assemble(
             "\n",
@@ -220,12 +227,9 @@ def chat(
         )
         console.print(chat_header)
 
-        user = config.user.email if config.user and config.user.email else None
-        user_attribution = f" ({user})" if user else ""
-
         while True:
             user_input = console.input(
-                f"\n[magenta][bold]User[/bold]{user_attribution}:[/magenta] "
+                f"\n[magenta][bold]User[/bold] {user_attribution}:[/magenta] "
             )
             messages.append({"role": "user", "content": user_input})
 
@@ -234,7 +238,7 @@ def chat(
                     model=model,
                     messages=messages,
                     tool_choice="generate",
-                    user=user,
+                    user=user_email,
                 )
                 role, message = display_streamed_markdown(stream_response)
                 messages.append({"role": role, "content": message})
@@ -243,7 +247,7 @@ def chat(
                     model=model,
                     messages=messages,
                     tool_choice="generate",
-                    user=user,
+                    user=user_email,
                 )
                 message_content = response.choices[0].message.content or ""
                 role = response.choices[0].message.role
@@ -380,7 +384,7 @@ def display_config_as_table(config: Config) -> None:
     console.print(table)
 
 
-def display_streamed_markdown(stream: Stream[ChatCompletionChunk]) -> tuple[str, dict[str, Any]]:
+def display_streamed_markdown(stream: Stream[ChatCompletionChunk]) -> tuple[str, str]:
     """
     Display the streamed markdown chunks as a single line.
     """
@@ -393,7 +397,7 @@ def display_streamed_markdown(stream: Stream[ChatCompletionChunk]) -> tuple[str,
             choice = chunk.choices[0]
             chunk_message = choice.delta.content
             if role == "":
-                role = choice.delta.role
+                role = choice.delta.role or ""
                 if role == "assistant":
                     console.print("\n[bold blue]Assistant:[/bold blue] ")
             if chunk_message:
