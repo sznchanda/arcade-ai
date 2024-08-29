@@ -5,10 +5,17 @@ from pydantic import BaseModel
 from arcade_gmail.tools import gmail
 from arcade_github.tools import repo, user
 from arcade_slack.tools import chat
+from arcade.core.config import config
 
 from arcade.actor.fastapi.actor import FastAPIActor
 
-client = AsyncOpenAI(base_url="http://localhost:9099/v1")
+if not config.api or not config.api.key:
+    raise ValueError("Arcade API key not set. Please run `arcade login`.")
+
+client = AsyncOpenAI(
+    api_key=config.api.key,
+    base_url="http://localhost:9099/v1",
+)
 
 app = FastAPI()
 
@@ -40,7 +47,6 @@ async def postChat(request: ChatRequest, tool_choice: str = "execute"):
             ],
             model="gpt-4o-mini",
             max_tokens=500,
-            # TODO tests for tool choice
             tools=[
                 "GetEmails",
                 "WriteDraft",
@@ -51,7 +57,7 @@ async def postChat(request: ChatRequest, tool_choice: str = "execute"):
                 "SendMessageToChannel",
             ],
             tool_choice=tool_choice,
-            user="sam",
+            user=config.user.email if config.user else None,
         )
         return raw_response.choices
     except Exception as e:

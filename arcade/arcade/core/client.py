@@ -1,5 +1,4 @@
 import json
-import os
 from enum import Enum
 from typing import Any, Optional
 
@@ -117,8 +116,7 @@ def get_tool_args(chat_completion: ChatCompletion) -> list[tuple[str, dict[str, 
 
 
 class EngineClient:
-    def __init__(self, api_key: str | None = None, base_url: str | None = None):
-        api_key = os.environ["OPENAI_API_KEY"] if api_key is None else api_key
+    def __init__(self, api_key: str, base_url: str | None = None):
         self.client = OpenAI(api_key=api_key, base_url=base_url)
 
     def __getattr__(self, name: str) -> Any:
