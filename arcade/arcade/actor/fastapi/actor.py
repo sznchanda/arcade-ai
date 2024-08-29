@@ -49,7 +49,6 @@ class FastAPIRouter(Router):
                 method=request.method,
                 body_json=body_json,
             )
-
             if is_async_callable(handler):
                 return await handler(request_data)
             else:

@@ -42,14 +42,23 @@ class Actor(ABC):
 
     @abstractmethod
     def get_catalog(self) -> list[ToolDefinition]:
+        """
+        Get the catalog of tools available in the actor.
+        """
         pass
 
     @abstractmethod
     async def call_tool(self, request: ToolCallRequest) -> ToolCallResponse:
+        """
+        Send a request to call a tool to the Actor
+        """
         pass
 
     @abstractmethod
     def health_check(self) -> dict[str, Any]:
+        """
+        Perform a health check of the actor
+        """
         pass
 
 
