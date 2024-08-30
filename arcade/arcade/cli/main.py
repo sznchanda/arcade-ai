@@ -1,46 +1,63 @@
-import asyncio
 import os
+import threading
+import uuid
+import webbrowser
 from typing import Any, Optional
+from urllib.parse import urlencode
 
 import typer
-from openai.resources.chat.completions import ChatCompletionChunk, Stream
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
 from rich.table import Table
 from rich.text import Text
-from typer.core import TyperGroup
-from typer.models import Context
 
-from arcade.core.catalog import ToolCatalog
-from arcade.core.client import EngineClient
-from arcade.core.config import Config
-from arcade.core.schema import ToolCallOutput, ToolContext
-from arcade.core.toolkit import Toolkit
+from arcade.cli.authn import check_existing_login, LocalAuthCallbackServer
+from arcade.cli.utils import (
+    OrderCommands,
+    create_cli_catalog,
+    display_streamed_markdown,
+    validate_and_get_config,
+)
+from arcade.client import Arcade
 
-
-class OrderCommands(TyperGroup):
-    def list_commands(self, ctx: Context) -> list[str]:  # type: ignore[override]
-        """Return list of commands in the order appear."""
-        return list(self.commands)  # get commands using self.commands
-
-
-console = Console()
 cli = typer.Typer(
     cls=OrderCommands,
 )
+console = Console()
 
 
 @cli.command(help="Log in to Arcade Cloud")
-def login(
-    username: str = typer.Option(..., prompt="Username", help="Your Arcade Cloud username"),
-    api_key: str = typer.Option(None, prompt="API Key", help="Your Arcade Cloud API Key"),
-) -> None:
+def login() -> None:
     """
     Logs the user into Arcade Cloud.
     """
-    # Here you would add the logic to authenticate the user with Arcade Cloud
-    raise NotImplementedError("This feature is not yet implemented.")
+
+    if check_existing_login():
+        return
+
+    # Start the HTTP server in a new thread
+    state = str(uuid.uuid4())
+    auth_server = LocalAuthCallbackServer(state)
+    server_thread = threading.Thread(target=auth_server.run_server)
+    server_thread.start()
+
+    try:
+        # Open the browser for user login
+        callback_uri = "http://localhost:9905/callback"
+        params = urlencode({"callback_uri": callback_uri, "state": state})
+        # TODO: make this configurable
+        login_url = f"http://localhost:8001/api/v1/auth/cli_login?{params}"
+        console.print("Opening a browser to log you in...")
+        webbrowser.open(login_url)
+
+        # Wait for the server thread to finish
+        server_thread.join()
+    except KeyboardInterrupt:
+        auth_server.shutdown_server()
+    finally:
+        if server_thread.is_alive():
+            server_thread.join()  # Ensure the server thread completes and cleans up
 
 
 @cli.command(help="Log out of Arcade Cloud")
@@ -48,8 +65,14 @@ def logout() -> None:
     """
     Logs the user out of Arcade Cloud.
     """
-    # Here you would add the logic to log the user out of Arcade Cloud
-    raise NotImplementedError("This feature is not yet implemented.")
+
+    # If ~/.arcade/arcade.toml exists, delete it
+    config_file_path = os.path.expanduser("~/.arcade/arcade.toml")
+    if os.path.exists(config_file_path):
+        os.remove(config_file_path)
+        console.print("You're now logged out.", style="bold")
+    else:
+        console.print("You're not logged in.", style="bold red")
 
 
 @cli.command(help="Create a new toolkit package directory")
@@ -100,135 +123,21 @@ def show(
         console.print(error_message, style="bold red")
 
 
-@cli.command(help="Run a tool using an LLM to predict the arguments")
-def run(
-    toolkit: Optional[str] = typer.Option(
-        None, "-t", "--toolkit", help="The toolkit to include in the run"
-    ),
-    model: str = typer.Option("gpt-4o", "-m", help="The model to use for prediction."),
-    tool: str = typer.Option(None, "--tool", help="The name of the tool to run."),
-    choice: str = typer.Option(
-        "generate", "-c", "--choice", help="The value of the tool choice argument"
-    ),
-    stream: bool = typer.Option(
-        False, "-s", "--stream", is_flag=True, help="Stream the tool output."
-    ),
-    prompt: str = typer.Argument(..., help="The prompt to use for context"),
-) -> None:
-    """
-    Run a tool using an LLM to predict the arguments.
-    """
-    from arcade.core.client import EngineClient
-    from arcade.core.executor import ToolExecutor
-
-    try:
-        catalog = create_cli_catalog(toolkit=toolkit)
-
-        tools = [catalog[tool]] if tool else list(catalog)
-
-        config = Config.load_from_file()
-        if not config.engine or not config.engine_url:
-            console.print("❌ Engine configuration not found or URL is missing.", style="bold red")
-            typer.Exit(code=1)
-
-        if not config.api or not config.api.key:
-            console.print(
-                "❌ API configuration not found or key is missing. Please run `arcade login`.",
-                style="bold red",
-            )
-            typer.Exit(code=1)
-        client = EngineClient(api_key=config.api.key, base_url=config.engine_url)
-
-        # TODO better way of doing this
-        tool_choice = "auto" if choice in ["execute", "generate"] else choice
-        calls = client.call_tool(tools, tool_choice=tool_choice, prompt=prompt, model=model)
-
-        if len(calls) == 0:
-            console.print("[bold red]No tools were called[/bold red]")
-
-        messages = [
-            {"role": "user", "content": prompt},
-        ]
-
-        for tool_name, parameters in calls:
-            called_tool = catalog[tool_name]
-            console.print(f"Calling tool: {tool_name} with params: {parameters}", style="bold blue")
-
-            # TODO async.gather instead of loop.
-            output: ToolCallOutput = asyncio.run(
-                ToolExecutor.run(
-                    called_tool.tool,
-                    called_tool.definition,
-                    called_tool.input_model,
-                    called_tool.output_model,
-                    ToolContext(),
-                    **parameters,
-                )
-            )
-            if output.error:
-                console.print(output.error.message, style="bold red")
-                typer.Exit(code=1)
-            else:
-                messages += [
-                    {
-                        "role": "assistant",
-                        # TODO: escape the output and ensure serialization works
-                        "content": f"Results of Tool {tool_name}: {output.value!s}",
-                    },
-                ]
-
-        if choice == "execute":
-            console.print(output.value, style="green")
-            raise typer.Exit(0)
-        else:
-            if stream:
-                stream_response = client.stream_complete(model=model, messages=messages)
-                display_streamed_markdown(stream_response)
-            else:
-                response = client.complete(model=model, messages=messages)
-                if not len(response.choices) and not response.choices[0].message.content:
-                    console.print("No response from the tool.", style="bold red")
-                else:
-                    console.print(Markdown(response.choices[0].message.content or ""))
-
-    except RuntimeError as e:
-        error_message = f"❌ Failed to run tool{': ' + escape(str(e)) if str(e) else ''}"
-        console.print(error_message, style="bold red")
-
-
 @cli.command(help="Chat with a language model")
 def chat(
     model: str = typer.Option("gpt-4o", "-m", help="The model to use for prediction."),
     stream: bool = typer.Option(
-        True, "-s", "--stream", is_flag=True, help="Stream the tool output."
+        False, "-s", "--stream", is_flag=True, help="Stream the tool output."
     ),
 ) -> None:
     """
     Chat with a language model.
     """
+    config = validate_and_get_config()
 
-    config = Config.load_from_file()
-    if not config.engine or not config.engine_url:
-        console.print("❌ Engine configuration not found or URL is missing.", style="bold red")
-        typer.Exit(code=1)
-
-    if not config.api or not config.api.key:
-        console.print(
-            "❌ API configuration not found or key is missing. Please run `arcade login`.",
-            style="bold red",
-        )
-        typer.Exit(code=1)
-
-    client = EngineClient(api_key=config.api.key, base_url=config.engine_url)
-
-    if config.user and config.user.email:
-        user_email = config.user.email
-        user_attribution = f"({user_email})"
-    else:
-        console.print(
-            "❌ User email not found in configuration. Please run `arcade login`.", style="bold red"
-        )
-        typer.Exit(code=1)
+    client = Arcade(api_key=config.api.key, base_url=config.engine_url)
+    user_email = config.user.email if config.user else None
+    user_attribution = f"({user_email})" if user_email else ""
 
     try:
         # start messages conversation
@@ -237,7 +146,7 @@ def chat(
         chat_header = Text.assemble(
             "\n",
             (
-                "======== Arcade AI Chat ========",
+                "=== Arcade AI Chat ===",
                 "bold magenta underline",
             ),
             "\n",
@@ -251,20 +160,24 @@ def chat(
             messages.append({"role": "user", "content": user_input})
 
             if stream:
-                stream_response = client.stream_complete(
+                # TODO Fix this in the client so users don't deal with these
+                # typing issues
+                stream_response = client.chat.completions.create(  # type: ignore[call-overload]
                     model=model,
                     messages=messages,
                     tool_choice="generate",
                     user=user_email,
+                    stream=True,
                 )
                 role, message = display_streamed_markdown(stream_response)
                 messages.append({"role": role, "content": message})
             else:
-                response = client.complete(
+                response = client.chat.completions.create(  # type: ignore[call-overload]
                     model=model,
                     messages=messages,
                     tool_choice="generate",
                     user=user_email,
+                    stream=False,
                 )
                 message_content = response.choices[0].message.content or ""
                 role = response.choices[0].message.role
@@ -310,30 +223,6 @@ def dev(
         raise typer.Exit(code=1)
 
 
-@cli.command(help="Manage the Arcade Engine (start/stop/restart)")
-def engine(
-    action: str = typer.Argument("start", help="The action to take (start/stop/restart)"),
-    host: str = typer.Option("localhost", "--host", "-h", help="The host of the engine"),
-    port: int = typer.Option(6901, "--port", "-p", help="The port of the engine"),
-) -> None:
-    """
-    Manage the Arcade Engine (start/stop/restart)
-    """
-    raise NotImplementedError("This feature is not yet implemented.")
-
-
-@cli.command(help="Manage credientials stored in the Arcade Engine")
-def credentials(
-    action: str = typer.Argument("show", help="The action to take (add/remove/show)"),
-    name: str = typer.Option(None, "--name", "-n", help="The name of the credential to add/remove"),
-    val: str = typer.Option(None, "--val", "-v", help="The value of the credential to add/remove"),
-) -> None:
-    """
-    Manage credientials stored in the Arcade Engine
-    """
-    raise NotImplementedError("This feature is not yet implemented.")
-
-
 @cli.command(help="Show/edit configuration details of the Arcade Engine")
 def config(
     action: str = typer.Argument("show", help="The action to take (show/edit)"),
@@ -345,8 +234,7 @@ def config(
     """
     Show/edit configuration details of the Arcade Engine
     """
-
-    config = Config.load_from_file()
+    config = validate_and_get_config()
 
     if action == "show":
         display_config_as_table(config)
@@ -376,7 +264,7 @@ def config(
         raise typer.Exit(code=1)
 
 
-def display_config_as_table(config: Config) -> None:
+def display_config_as_table(config) -> None:  # type: ignore[no-untyped-def]
     """
     Display the configuration details as a table using Rich library.
     """
@@ -399,58 +287,3 @@ def display_config_as_table(config: Config) -> None:
             table.add_row("", "", "")
 
     console.print(table)
-
-
-def display_streamed_markdown(stream: Stream[ChatCompletionChunk]) -> tuple[str, str]:
-    """
-    Display the streamed markdown chunks as a single line.
-    """
-    from rich.live import Live
-
-    full_message = ""
-    role = ""
-    with Live(console=console, refresh_per_second=10) as live:
-        for chunk in stream:
-            choice = chunk.choices[0]
-            chunk_message = choice.delta.content
-            if role == "":
-                role = choice.delta.role or ""
-                if role == "assistant":
-                    console.print("\n[bold blue]Assistant:[/bold blue] ")
-            if chunk_message:
-                full_message += chunk_message
-                markdown_chunk = Markdown(full_message)
-                live.update(markdown_chunk)
-        return role, full_message
-
-
-def create_cli_catalog(
-    toolkit: str | None = None,
-    show_toolkits: bool = False,
-) -> ToolCatalog:
-    """
-    Load toolkits from the python environment.
-    """
-    if toolkit:
-        try:
-            prefixed_toolkit = "arcade_" + toolkit
-            toolkits = [Toolkit.from_package(prefixed_toolkit)]
-        except ValueError:
-            try:  # try without prefix
-                toolkits = [Toolkit.from_package(toolkit)]
-            except ValueError as e:
-                console.print(f"❌ {e}", style="bold red")
-                typer.Exit(code=1)
-    else:
-        toolkits = Toolkit.find_all_arcade_toolkits()
-
-    if not toolkits:
-        console.print("❌ No toolkits found or specified", style="bold red")
-        typer.Exit(code=1)
-
-    catalog = ToolCatalog()
-    for loaded_toolkit in toolkits:
-        if show_toolkits:
-            console.print(f"Loading toolkit: {loaded_toolkit.name}", style="bold blue")
-        catalog.add_toolkit(loaded_toolkit)
-    return catalog

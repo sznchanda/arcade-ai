@@ -5,8 +5,6 @@ from urllib.parse import urljoin
 import httpx
 from httpx import Timeout
 
-from arcade.core.config import config
-
 T = TypeVar("T")
 ResponseT = TypeVar("ResponseT")
 
@@ -26,7 +24,6 @@ class BaseArcadeClient:
         base_url: str,
         api_key: str | None = None,
         headers: dict[str, str] | None = None,
-        proxies: str | dict[str, str] | None = None,
         timeout: float | Timeout = 10.0,
         retries: int = 3,
     ):
@@ -37,28 +34,20 @@ class BaseArcadeClient:
             base_url: The base URL for the Arcade API.
             api_key: The API key for authentication.
             headers: Additional headers to include in requests.
-            proxies: Proxy configuration for requests.
             timeout: Request timeout in seconds.
             retries: Number of retries for failed requests.
         """
         self._base_url = base_url
-        self._api_key = api_key or os.environ.get("ARCADE_API_KEY") or config.api.key
+        self._api_key = api_key or os.environ.get("ARCADE_API_KEY")
         self._headers = headers or {}
         self._headers.setdefault("Authorization", f"Bearer {self._api_key}")
         self._headers.setdefault("Content-Type", "application/json")
-        self._proxies = proxies
         self._timeout = timeout
         self._retries = retries
 
     def _build_url(self, path: str) -> str:
         """
         Build the full URL for a given path.
-
-        Args:
-            path: The path to append to the base URL.
-
-        Returns:
-            The full URL.
         """
         return urljoin(self._base_url, path)
 
@@ -71,7 +60,6 @@ class SyncArcadeClient(BaseArcadeClient):
         self._client = httpx.Client(
             base_url=self._base_url,
             headers=self._headers,
-            proxies=self._proxies,
             timeout=self._timeout,
         )
 
@@ -116,7 +104,6 @@ class AsyncArcadeClient(BaseArcadeClient):
             self._client = httpx.AsyncClient(
                 base_url=self._base_url,
                 headers=self._headers,
-                proxies=self._proxies,
                 timeout=self._timeout,
             )
         return self._client
