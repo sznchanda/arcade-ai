@@ -1,5 +1,3 @@
-from typing import TYPE_CHECKING
-
 import typer
 from openai.resources.chat.completions import ChatCompletionChunk, Stream
 from rich.console import Console
@@ -8,10 +6,8 @@ from typer.core import TyperGroup
 from typer.models import Context
 
 from arcade.core.catalog import ToolCatalog
+from arcade.core.config_model import Config
 from arcade.core.toolkit import Toolkit
-
-if TYPE_CHECKING:
-    from arcade.core.config import Config
 
 console = Console()
 
@@ -101,7 +97,7 @@ def validate_and_get_config(
     validate_engine: bool = True,
     validate_api: bool = True,
     validate_user: bool = True,
-) -> "Config":
+) -> Config:
     """
     Validates the configuration, user, and returns the Config object
     """
@@ -125,3 +121,32 @@ def validate_and_get_config(
         raise typer.Exit(code=1)
 
     return config
+
+
+def apply_config_overrides(
+    config: Config, host_input: str | None, port_input: int | None, tls_input: bool | None
+) -> None:
+    """
+    Apply optional config overrides (passed by the user) to the config object.
+    """
+
+    if not config.engine:
+        # Should not happen, validate_and_get_config ensures that `engine` is set
+        raise ValueError("Engine configuration not found in config.")
+
+    # Special case for "localhost" and nothing else specified:
+    # default to dev port and no TLS for convenience
+    if host_input == "localhost":
+        if port_input is None:
+            port_input = 9099
+        if tls_input is None:
+            tls_input = False
+
+    if host_input:
+        config.engine.host = host_input
+
+    if port_input is not None:
+        config.engine.port = port_input
+
+    if tls_input is not None:
+        config.engine.tls = tls_input

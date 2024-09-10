@@ -16,12 +16,14 @@ from rich.text import Text
 from arcade.cli.authn import LocalAuthCallbackServer, check_existing_login
 from arcade.cli.utils import (
     OrderCommands,
+    apply_config_overrides,
     create_cli_catalog,
     display_streamed_markdown,
     markdownify_urls,
     validate_and_get_config,
 )
 from arcade.client import Arcade
+from arcade.client.errors import EngineNotHealthyError, EngineOfflineError
 
 cli = typer.Typer(
     cls=OrderCommands,
@@ -30,7 +32,14 @@ console = Console()
 
 
 @cli.command(help="Log in to Arcade Cloud")
-def login() -> None:
+def login(
+    host: str = typer.Option(
+        "https://cloud.arcade-ai.com",
+        "-h",
+        "--host",
+        help="The Arcade Cloud host to log in to.",
+    ),
+) -> None:
     """
     Logs the user into Arcade Cloud.
     """
@@ -48,8 +57,7 @@ def login() -> None:
         # Open the browser for user login
         callback_uri = "http://localhost:9905/callback"
         params = urlencode({"callback_uri": callback_uri, "state": state})
-        # TODO: make this configurable
-        login_url = f"http://localhost:8001/api/v1/auth/cli_login?{params}"
+        login_url = f"https://{host}/api/v1/auth/cli_login?{params}"
         console.print("Opening a browser to log you in...")
         webbrowser.open(login_url)
 
@@ -131,11 +139,41 @@ def chat(
     stream: bool = typer.Option(
         False, "-s", "--stream", is_flag=True, help="Stream the tool output."
     ),
+    host: str = typer.Option(
+        None,
+        "-h",
+        "--host",
+        help="The Arcade Engine address to send chat requests to.",
+    ),
+    port: int = typer.Option(
+        None,
+        "-p",
+        "--port",
+        help="The port of the Arcade Engine.",
+    ),
+    force_tls: bool = typer.Option(
+        False,
+        "--tls",
+        help="Whether to force TLS for the connection to the Arcade Engine. If not specified, the connection will use TLS if the engine URL uses a 'https' scheme.",
+    ),
+    force_no_tls: bool = typer.Option(
+        False,
+        "--no-tls",
+        help="Whether to disable TLS for the connection to the Arcade Engine.",
+    ),
 ) -> None:
     """
     Chat with a language model.
     """
     config = validate_and_get_config()
+
+    if not force_tls and not force_no_tls:
+        tls_input = None
+    elif force_no_tls:
+        tls_input = False
+    else:
+        tls_input = True
+    apply_config_overrides(config, host, port, tls_input)
 
     client = Arcade(api_key=config.api.key, base_url=config.engine_url)
     user_email = config.user.email if config.user else None
@@ -153,9 +191,16 @@ def chat(
             ),
             "\n",
             "\n",
-            "Chatting with Arcade Engine at " + config.engine_url,
+            "Chatting with Arcade Engine at ",
+            (
+                config.engine_url,
+                "bold blue",
+            ),
         )
         console.print(chat_header)
+
+        # Try to hit /health endpoint on engine and warn if it is down
+        log_engine_health(client)
 
         while True:
             console.print(f"\n[magenta][bold]User[/bold] {user_attribution}:[/magenta] ")
@@ -275,6 +320,28 @@ def config(
     else:
         console.print(f"❌ Invalid action: {action}", style="bold red")
         raise typer.Exit(code=1)
+
+
+def log_engine_health(client: Arcade) -> None:
+    try:
+        client.health.check()
+
+    except EngineNotHealthyError as e:
+        console.print(
+            "[bold][yellow]⚠️ Warning: "
+            + str(e)
+            + " ("
+            + "[/yellow]"
+            + "[red]"
+            + str(e.status_code)
+            + "[/red]"
+            + "[yellow])[/yellow][/bold]"
+        )
+    except EngineOfflineError:
+        console.print(
+            "⚠️ Warning: Arcade Engine was unreachable. (Is it running?)",
+            style="bold yellow",
+        )
 
 
 def display_config_as_table(config) -> None:  # type: ignore[no-untyped-def]
