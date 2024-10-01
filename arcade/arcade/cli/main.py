@@ -284,37 +284,6 @@ def chat(
         raise typer.Exit()
 
 
-@cli.command(help="Start a local Arcade Actor server", rich_help_panel="Launch")
-def dev(
-    host: str = typer.Option(
-        "127.0.0.1", help="Host for the app, from settings by default.", show_default=True
-    ),
-    port: int = typer.Option(
-        "8002", "-p", "--port", help="Port for the app, defaults to ", show_default=True
-    ),
-    disable_auth: bool = typer.Option(
-        False,
-        "--no-auth",
-        help="Disable authentication for the actor. Not recommended for production.",
-        show_default=True,
-    ),
-) -> None:
-    """
-    Starts the actor with host, port, and reload options. Uses
-    Uvicorn as ASGI actor. Parameters allow runtime configuration.
-    """
-    from arcade.cli.serve import serve_default_actor
-
-    try:
-        serve_default_actor(host, port, disable_auth)
-    except KeyboardInterrupt:
-        typer.Exit()
-    except Exception as e:
-        error_message = f"❌ Failed to start Arcade Actor: {escape(str(e))}"
-        console.print(error_message, style="bold red")
-        raise typer.Exit(code=1)
-
-
 @cli.command(help="Show/edit the local Arcade configuration", rich_help_panel="User")
 def config(
     action: str = typer.Argument("show", help="The action to take (show/edit)"),
@@ -500,8 +469,8 @@ def evals(
             display_eval_results(results, show_details=show_details)
 
 
-@cli.command(help="Start an Arcade Cluster instance", rich_help_panel="Launch")
-def up(
+@cli.command(help="Launch Arcade AI locally for tool dev", rich_help_panel="Launch")
+def dev(
     host: str = typer.Option("127.0.0.1", help="Host for the actor server.", show_default=True),
     port: int = typer.Option(
         8002, "-p", "--port", help="Port for the actor server.", show_default=True
@@ -509,14 +478,47 @@ def up(
     engine_config: str = typer.Option(
         None, "-c", "--config", help="Path to the engine configuration file."
     ),
+    debug: bool = typer.Option(False, "-d", "--debug", help="Show debug information"),
 ) -> None:
     """
     Start both the actor and engine servers.
     """
     try:
         # TODO: pass Engine env vars from here
-        start_servers(host, port, engine_config)
+        start_servers(host, port, engine_config, engine_env=None, debug=debug)
     except Exception as e:
         error_message = f"❌ Failed to start servers: {escape(str(e))}"
+        console.print(error_message, style="bold red")
+        typer.Exit(code=1)
+
+
+@cli.command(help="Start a local Arcade Actor server", rich_help_panel="Launch", hidden=True)
+def actorup(
+    host: str = typer.Option(
+        "127.0.0.1", help="Host for the app, from settings by default.", show_default=True
+    ),
+    port: int = typer.Option(
+        "8002", "-p", "--port", help="Port for the app, defaults to ", show_default=True
+    ),
+    disable_auth: bool = typer.Option(
+        False,
+        "--no-auth",
+        help="Disable authentication for the actor. Not recommended for production.",
+        show_default=True,
+    ),
+    debug: bool = typer.Option(False, "--debug", "-d", help="Show debug information"),
+) -> None:
+    """
+    Starts the actor with host, port, and reload options. Uses
+    Uvicorn as ASGI actor. Parameters allow runtime configuration.
+    """
+    from arcade.cli.serve import serve_default_actor
+
+    try:
+        serve_default_actor(host, port, disable_auth=disable_auth, debug=debug)
+    except KeyboardInterrupt:
+        typer.Exit()
+    except Exception as e:
+        error_message = f"❌ Failed to start Arcade Actor: {escape(str(e))}"
         console.print(error_message, style="bold red")
         typer.Exit(code=1)

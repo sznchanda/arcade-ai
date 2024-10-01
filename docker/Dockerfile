@@ -8,6 +8,7 @@ ARG HOST=0.0.0.0
 # Set environment variables using the build arguments
 ENV PORT=${PORT}
 ENV HOST=${HOST}
+ENV OTEL_ENABLE=false
 ENV ARCADE_WORK_DIR=/app
 
 # Install system dependencies
@@ -53,5 +54,5 @@ RUN set -e; \
 # Expose the port
 EXPOSE $PORT
 
-# Run the arcade dev command
-CMD arcade dev --host $HOST --port $PORT
+# Run the arcade actorup (hidden cli command)
+CMD arcade actorup --host $HOST --port $PORT
