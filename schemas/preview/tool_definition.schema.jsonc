@@ -50,6 +50,10 @@
       "type": "string",
       "description": "The tool name"
     },
+    "fully_qualified_name": {
+      "type": "string",
+      "description": "The tool's fully-qualified name"
+    },
     "description": {
       "type": "string",
       "description": "A human-readable description of the tool and when to use it"
@@ -147,17 +151,18 @@
             {
               "type": "object",
               "properties": {
-                "provider": {
-                  "type": "string"
+                "provider_id": {
+                  "type": "string",
+                  "description": "A unique provider ID."
+                },
+                "provider_type": {
+                  "type": "string",
+                  "description": "The provider type."
                 },
                 "oauth2": {
                   "type": "object",
                   "properties": {
-                    "authority": {
-                      "type": "string",
-                      "format": "uri"
-                    },
-                    "scope": {
+                    "scopes": {
                       "type": "array",
                       "items": {
                         "type": "string"
@@ -167,7 +172,7 @@
                   "additionalProperties": false
                 }
               },
-              "required": ["provider"],
+              "required": ["provider_id", "provider_type"],
               "additionalProperties": false
             }
           ]
@@ -176,6 +181,6 @@
       "additionalProperties": false
     }
   },
-  "required": ["name", "toolkit", "inputs", "output"],
+  "required": ["name", "fully_qualified_name", "toolkit", "inputs", "output"],
   "additionalProperties": false
 }

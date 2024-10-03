@@ -17,7 +17,7 @@ from arcade.core.schema import (
 from arcade.core.utils import snake_to_pascal_case
 from arcade.sdk import tool
 from arcade.sdk.annotations import Inferrable
-from arcade.sdk.auth import GitHubApp, Google, OAuth2, SlackUser, X
+from arcade.sdk.auth import GitHub, Google, OAuth2, Slack, X
 
 
 ### Tests on @tool decorator
@@ -48,7 +48,10 @@ def func_with_name_and_description():
 
 @tool(
     desc="A function that requires authentication",
-    requires_auth=OAuth2(authority="https://example.com/oauth2/auth", scopes=["scope1", "scope2"]),
+    requires_auth=OAuth2(
+        provider_id="example",
+        scopes=["scope1", "scope2"],
+    ),
 )
 def func_with_auth_requirement():
     pass
@@ -64,7 +67,7 @@ def func_with_google_auth_requirement():
 
 @tool(
     desc="A function that requires GitHub authorization",
-    requires_auth=GitHubApp(),
+    requires_auth=GitHub(),
 )
 def func_with_github_auth_requirement():
     pass
@@ -72,7 +75,7 @@ def func_with_github_auth_requirement():
 
 @tool(
     desc="A function that requires Slack user authorization",
-    requires_auth=SlackUser(scopes=["chat:write", "channels:history"]),
+    requires_auth=Slack(scopes=["chat:write", "channels:history"]),
 )
 def func_with_slack_user_auth_requirement():
     pass
@@ -239,7 +242,7 @@ def func_with_complex_return() -> dict[str, str]:
             func_with_name_and_description,
             {
                 "name": "MyCustomTool",
-                "full_name": "TestToolkit.MyCustomTool",
+                "fully_qualified_name": "TestToolkit.MyCustomTool",
                 "description": "A function with a very cool description",
             },
             id="func_with_description_and_name",
@@ -254,7 +257,8 @@ def func_with_complex_return() -> dict[str, str]:
             {
                 "requirements": ToolRequirements(
                     authorization=ToolAuthRequirement(
-                        provider="oauth2",
+                        provider_id="example",
+                        provider_type="oauth2",
                         oauth2=OAuth2Requirement(
                             authority="https://example.com/oauth2/auth",
                             scopes=["scope1", "scope2"],
@@ -269,7 +273,8 @@ def func_with_complex_return() -> dict[str, str]:
             {
                 "requirements": ToolRequirements(
                     authorization=ToolAuthRequirement(
-                        provider="google",
+                        provider_id="google",
+                        provider_type="oauth2",
                         oauth2=OAuth2Requirement(
                             scopes=["https://www.googleapis.com/auth/gmail.readonly"],
                         ),
@@ -283,7 +288,7 @@ def func_with_complex_return() -> dict[str, str]:
             {
                 "requirements": ToolRequirements(
                     authorization=ToolAuthRequirement(
-                        provider="github_app",
+                        provider_id="github", provider_type="oauth2", oauth2=OAuth2Requirement()
                     )
                 )
             },
@@ -294,7 +299,8 @@ def func_with_complex_return() -> dict[str, str]:
             {
                 "requirements": ToolRequirements(
                     authorization=ToolAuthRequirement(
-                        provider="slack_user",
+                        provider_id="slack",
+                        provider_type="oauth2",
                         oauth2=OAuth2Requirement(
                             scopes=["chat:write", "channels:history"],
                         ),
@@ -683,7 +689,7 @@ def test_tool_name_is_set_correctly():
     tool_def = ToolCatalog.create_tool_definition(func_with_description, "test_toolkit", "1.0.0")
 
     assert tool_def.name == snake_to_pascal_case(func_with_description.__name__)
-    assert tool_def.full_name == "TestToolkit.FuncWithDescription"
+    assert tool_def.fully_qualified_name == "TestToolkit.FuncWithDescription"
 
 
 @pytest.mark.parametrize(

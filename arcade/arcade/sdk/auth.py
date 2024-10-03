@@ -1,60 +1,71 @@
-from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Optional
 
-from pydantic import AnyUrl, BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
-class ToolAuthorization(BaseModel, ABC):
+class AuthProviderType(str, Enum):
+    oauth2 = "oauth2"
+
+
+class ToolAuthorization(BaseModel):
     """Marks a tool as requiring authorization."""
 
-    @abstractmethod
-    def get_provider(self) -> str:
-        """Return the name of the authorization method."""
-        pass
+    model_config = ConfigDict(frozen=True)
 
-    pass
+    provider_id: str
+    """The unique provider ID configured in Arcade."""
+
+    provider_type: AuthProviderType
+    """The type of the authorization provider."""
 
 
-class BaseOAuth2(ToolAuthorization):
-    """Base class for any provider supporting OAuth 2.0-like authorization."""
+class OAuth2(ToolAuthorization):
+    """Marks a tool as requiring OAuth 2.0 authorization."""
 
-    authority: Optional[AnyUrl] = None
-    """The URL of the OAuth 2.0 authorization server."""
+    provider_type: AuthProviderType = AuthProviderType.oauth2
 
     scopes: Optional[list[str]] = None
     """The scope(s) needed for the authorized action."""
 
 
-class OAuth2(BaseOAuth2):
-    """Marks a tool as requiring OAuth 2.0 authorization."""
-
-    def get_provider(self) -> str:
-        return "oauth2"
-
-
-class Google(BaseOAuth2):
+class Google(OAuth2):
     """Marks a tool as requiring Google authorization."""
 
-    def get_provider(self) -> str:
-        return "google"
+    provider_id: str = "google"
 
 
-class SlackUser(BaseOAuth2):
+class Slack(OAuth2):
     """Marks a tool as requiring Slack (user token) authorization."""
 
-    def get_provider(self) -> str:
-        return "slack_user"
+    provider_id: str = "slack"
 
 
-class GitHubApp(ToolAuthorization):
+class GitHub(OAuth2):
     """Marks a tool as requiring GitHub App authorization."""
 
-    def get_provider(self) -> str:
-        return "github_app"
+    provider_id: str = "github"
 
 
-class X(BaseOAuth2):
+class X(OAuth2):
     """Marks a tool as requiring X (Twitter) authorization."""
 
-    def get_provider(self) -> str:
-        return "x"
+    provider_id: str = "x"
+
+
+class LinkedIn(OAuth2):
+    """Marks a tool as requiring LinkedIn authorization."""
+
+    provider_id: str = "linkedin"
+
+
+class Spotify(OAuth2):
+    """Marks a tool as requiring Spotify authorization."""
+
+    provider_id: str = "spotify"
+
+
+class Zoom(OAuth2):
+    """Marks a tool as requiring Zoom authorization."""
+
+    provider_id: str = "zoom"

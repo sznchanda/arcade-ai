@@ -12,7 +12,11 @@ TWEETS_URL = "https://api.x.com/2/tweets"
 
 
 # Manage Tweets Tools. See developer docs for additional available parameters: https://developer.x.com/en/docs/x-api/tweets/manage-tweets/api-reference
-@tool(requires_auth=X(scopes=["tweet.read", "tweet.write", "users.read"]))
+@tool(
+    requires_auth=X(
+        scopes=["tweet.read", "tweet.write", "users.read"],
+    )
+)
 async def post_tweet(
     context: ToolContext,
     tweet_text: Annotated[str, "The text content of the tweet you want to post"],

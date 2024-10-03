@@ -1,7 +1,7 @@
 import os
 from enum import Enum
 
-from pydantic import AnyUrl, BaseModel, Field
+from pydantic import BaseModel, Field
 
 from arcade.core.schema import ToolAuthorizationContext, ToolCallOutput
 
@@ -9,19 +9,21 @@ OPENAI_API_VERSION = os.getenv("OPENAI_API_VERSION", "v1")
 
 
 class AuthProvider(str, Enum):
-    """The supported authorization providers."""
-
-    oauth2 = "oauth2"
-    """OAuth 2.0 authorization"""
-
     google = "google"
     """Google authorization"""
 
-    slack_user = "slack_user"
+    slack = "slack_user"
     """Slack (user token) authorization"""
 
-    github_app = "github_app"
-    """GitHub App authorization"""
+    github = "github"
+    """GitHub authorization"""
+
+
+class AuthProviderType(str, Enum):
+    """The supported authorization provider types."""
+
+    oauth2 = "oauth2"
+    """OAuth 2.0 authorization"""
 
 
 class AuthRequest(BaseModel):
@@ -29,9 +31,6 @@ class AuthRequest(BaseModel):
     The requirements for authorization for a tool
     # TODO (Nate): Make a validator here
     """
-
-    authority: AnyUrl | str | None = None
-    """The URL of the OAuth 2.0 authorization server."""
 
     scopes: list[str]
     """The scope(s) needed for authorization."""

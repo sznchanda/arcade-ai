@@ -6,11 +6,11 @@ from slack_sdk.errors import SlackApiError
 from arcade.core.errors import RetryableToolError, ToolExecutionError
 from arcade.core.schema import ToolContext
 from arcade.sdk import tool
-from arcade.sdk.auth import SlackUser
+from arcade.sdk.auth import Slack
 
 
 @tool(
-    requires_auth=SlackUser(
+    requires_auth=Slack(
         scopes=[
             "chat:write",
             "im:write",
@@ -74,7 +74,7 @@ def format_users(userListResponse: dict) -> str:
 
 
 @tool(
-    requires_auth=SlackUser(
+    requires_auth=Slack(
         scopes=[
             "chat:write",
             "channels:read",

@@ -11,6 +11,7 @@ from arcade.client.base import (
 from arcade.client.errors import APIStatusError, EngineNotHealthyError, EngineOfflineError
 from arcade.client.schema import (
     AuthProvider,
+    AuthProviderType,
     AuthRequest,
     AuthResponse,
     ExecuteToolResponse,
@@ -29,10 +30,10 @@ class AuthResource(BaseResource[ClientT]):
 
     def authorize(
         self,
-        provider: AuthProvider,
-        scopes: list[str],
         user_id: str,
-        authority: str | None = None,
+        provider: AuthProvider | str,
+        provider_type: AuthProviderType = AuthProviderType.oauth2,
+        scopes: list[str] | None = None,
     ) -> AuthResponse:
         """
         Initiate an authorization request.
@@ -41,16 +42,14 @@ class AuthResource(BaseResource[ClientT]):
             provider: The authorization provider.
             scopes: The scopes required for the authorization.
             user_id: The user ID initiating the authorization.
-            authority: The authority initiating the authorization.
         """
-        auth_provider = provider.value
+        auth_provider_type = provider_type.value
 
         body = {
             "auth_requirement": {
-                "provider": auth_provider,
-                auth_provider: AuthRequest(scopes=scopes, authority=authority).model_dump(
-                    exclude_none=True
-                ),
+                "provider_id": provider.value if isinstance(provider, AuthProvider) else provider,
+                "provider_type": auth_provider_type,
+                auth_provider_type: AuthRequest(scopes=scopes or []).model_dump(exclude_none=True),
             },
             "user_id": user_id,
         }
@@ -190,22 +189,21 @@ class AsyncAuthResource(BaseResource[AsyncArcadeClient]):
 
     async def authorize(
         self,
-        provider: AuthProvider,
-        scopes: list[str],
         user_id: str,
-        authority: str | None = None,
+        provider: AuthProvider | str,
+        provider_type: AuthProviderType = AuthProviderType.oauth2,
+        scopes: list[str] | None = None,
     ) -> AuthResponse:
         """
         Initiate an asynchronous authorization request.
         """
-        auth_provider = provider.value
+        auth_provider_type = provider_type.value
 
         body = {
             "auth_requirement": {
-                "provider": auth_provider,
-                auth_provider: AuthRequest(scopes=scopes, authority=authority).model_dump(
-                    exclude_none=True
-                ),
+                "provider_id": provider.value if isinstance(provider, AuthProvider) else provider,
+                "provider_type": auth_provider_type,
+                auth_provider_type: AuthRequest(scopes=scopes or []).model_dump(exclude_none=True),
             },
             "user_id": user_id,
         }
