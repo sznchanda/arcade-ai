@@ -15,8 +15,7 @@ except ImportError:
         "Use `pip install arcade-ai[evals]` to install the required dependencies for evaluation."
     )
 
-
-from arcade.client.client import Arcade, AsyncArcade
+from arcade.client.client import AsyncArcade
 from arcade.sdk.error import WeightError
 
 if TYPE_CHECKING:
@@ -199,10 +198,11 @@ class EvalCase:
         Returns:
             True if tool selection failure should occur, False otherwise.
         """
-        expected_tools = [tc.name for tc in self.expected_tool_calls]
+        sorted_expected_tools = sorted([tc.name for tc in self.expected_tool_calls])
+        sorted_actual_tools = sorted(actual_tools)
         return self.rubric.fail_on_tool_selection and not all(
             compare_tool_name(expected, actual)
-            for expected, actual in zip(expected_tools, actual_tools)
+            for expected, actual in zip(sorted_expected_tools, sorted_actual_tools)
         )
 
     def check_tool_call_quantity_failure(self, actual_count: int) -> bool:
@@ -270,7 +270,7 @@ class EvalCase:
         cost_matrix = self._create_cost_matrix(actual_tool_calls)
 
         # Use the Linear Sum Assignment (LSA) algorithm to find the optimal assignment
-        # The algorithm minimizes the cost of assigning each expected tool call to an actual tool call
+        # The algorithm maximizes the total score of the assignment
         row_ind, col_ind = linear_sum_assignment(cost_matrix, maximize=True)
 
         total_score = 0.0
@@ -292,12 +292,23 @@ class EvalCase:
                     expected_value = expected.args.get(critic.critic_field)
                     actual_value = actual_args.get(critic.critic_field)
                     if expected_value is not None and actual_value is not None:
-                        result = critic.evaluate(expected_value, actual_value)
-                        total_score += result["score"]
-                        total_weight += critic.weight
-                        evaluation_result.add(
-                            critic.critic_field, result, critic.weight, expected_value, actual_value
-                        )
+                        try:
+                            result = critic.evaluate(expected_value, actual_value)
+                            total_score += result["score"]
+                            total_weight += critic.weight
+                            evaluation_result.add(
+                                critic.critic_field,
+                                result,
+                                critic.weight,
+                                expected_value,
+                                actual_value,
+                            )
+                        except Exception as e:
+                            print(
+                                f"Critic evaluation failed for field '{critic.critic_field}': {e}"
+                            )
+                            # Depending on requirements, you might want to continue or handle differently
+                            continue
 
         # Compute the final score using the method from EvaluationResult
         evaluation_result.compute_final_score(total_weight)
@@ -327,27 +338,49 @@ class EvalCase:
         Returns:
             A numpy array representing the cost matrix.
         """
-        n = max(len(self.expected_tool_calls), len(actual_tool_calls))
-        cost_matrix = np.zeros((n, n))
+        num_expected = len(self.expected_tool_calls)
+        num_actual = len(actual_tool_calls)
+        n = max(num_expected, num_actual)
 
-        for i, expected in enumerate(self.expected_tool_calls):
-            for j, (actual_tool, actual_args) in enumerate(actual_tool_calls):
-                score = 0.0
-                if expected.name == actual_tool:
-                    score += self.rubric.tool_selection_weight
+        # Initialize a score matrix with zeros
+        score_matrix = np.zeros((n, n))
 
-                if self.critics:
-                    for critic in self.critics:
-                        expected_value = expected.args.get(critic.critic_field)
-                        actual_value = actual_args.get(critic.critic_field)
-                        if expected_value is not None and actual_value is not None:
-                            result = critic.evaluate(expected_value, actual_value)
-                            score += result["score"]
-                cost_matrix[i, j] = score
+        for i in range(n):
+            for j in range(n):
+                if i < num_expected and j < num_actual:
+                    expected = self.expected_tool_calls[i]
+                    expected_tool = expected.name
+                    expected_args = expected.args
+                    actual_tool, actual_args = actual_tool_calls[j]
+                    score = 0.0
 
-        return cost_matrix
+                    # Tool selection
+                    if compare_tool_name(expected_tool, actual_tool):
+                        score += self.rubric.tool_selection_weight
 
-    async def run_async(
+                    # Critics evaluation
+                    if self.critics:
+                        for critic in self.critics:
+                            expected_value = expected_args.get(critic.critic_field)
+                            actual_value = actual_args.get(critic.critic_field)
+                            if expected_value is not None and actual_value is not None:
+                                try:
+                                    result = critic.evaluate(expected_value, actual_value)
+                                    score += result.get("score", 0.0)
+                                except Exception as e:
+                                    print(
+                                        f"Critic evaluation failed for field '{critic.critic_field}': {e}"
+                                    )
+                                    continue
+
+                    score_matrix[i, j] = score
+                else:
+                    # Assign a score of 0 for dummy assignments
+                    score_matrix[i, j] = 0.0
+
+        return score_matrix
+
+    async def run(
         self, client: AsyncArcade, model: str, tool_names: list[FullyQualifiedName]
     ) -> dict[str, Any]:
         """
@@ -389,48 +422,6 @@ class EvalCase:
 
         return result
 
-    def run_sync(
-        self, client: Arcade, model: str, tool_names: list[FullyQualifiedName]
-    ) -> dict[str, Any]:
-        """
-        Run the evaluation case synchronously.
-
-        Args:
-            client: The Arcade client instance.
-            model: The model to evaluate.
-            tool_names: The list of tool names to use for the evaluation.
-        Returns:
-            A dictionary containing the evaluation result for the case.
-        """
-        messages = [{"role": "system", "content": self.system_message}]
-        messages.extend(list(self.additional_messages))
-        messages.append({"role": "user", "content": self.user_message})
-
-        response = client.chat.completions.create(  # type: ignore[call-overload]
-            model=model,
-            messages=messages,
-            tool_choice="auto",
-            tools=(str(name) for name in tool_names),
-            user="eval_user",
-            stream=False,
-        )
-
-        predicted_args = get_tool_args(response)
-
-        evaluation = self.evaluate(predicted_args)
-
-        result = {
-            "name": self.name,
-            "input": self.user_message,
-            "expected_tool_calls": [
-                {"name": tc.name, "args": tc.args} for tc in self.expected_tool_calls
-            ],
-            "predicted_tool_calls": [{"name": tool, "args": args} for tool, args in predicted_args],
-            "evaluation": evaluation,
-        }
-
-        return result
-
 
 @dataclass
 class EvalSuite:
@@ -445,7 +436,6 @@ class EvalSuite:
         system_message: The system message to be used for all cases in this suite.
         catalog: A ToolCatalog object containing registered tools.
         cases: A list of EvalCase objects representing individual test scenarios.
-        tool_choice: The tool choice mode for the AI model ("auto" or "function").
         rubric: The evaluation rubric for this case.
         max_concurrent: Maximum number of concurrent evaluations.
     """
@@ -455,23 +445,7 @@ class EvalSuite:
     catalog: "ToolCatalog"
     cases: list[EvalCase] = field(default_factory=list)
     rubric: EvalRubric = field(default_factory=EvalRubric)
-    max_concurrent: int = 1  # Default to sequential execution
-    _client: AsyncArcade | Arcade | None = None
-
-    def initialize_client(self, config: Config) -> None:
-        """
-        Initialize the client instance for the EvalSuite.
-        """
-        if self.max_concurrent > 1:
-            self._client = AsyncArcade(
-                api_key=config.api.key,
-                base_url=config.engine_url,
-            )
-        else:
-            self._client = Arcade(
-                api_key=config.api.key,
-                base_url=config.engine_url,
-            )
+    max_concurrent: int = 1
 
     def add_case(
         self,
@@ -568,10 +542,9 @@ class EvalSuite:
             critics=critics or (last_case.critics.copy() if last_case.critics else None),
             additional_messages=new_additional_messages,
         )
-
         self.cases.append(new_case)
 
-    async def run_async(self, model: str) -> dict[str, Any]:
+    async def run(self, client: AsyncArcade, model: str) -> dict[str, Any]:
         """
         Run the evaluation suite asynchronously.
 
@@ -581,9 +554,6 @@ class EvalSuite:
         Returns:
             A dictionary containing the evaluation results.
         """
-        if not self._client:
-            raise ValueError("Client not initialized. Call initialize_client() first.")
-
         results: dict[str, Any] = {"model": model, "rubric": self.rubric, "cases": []}
 
         semaphore = asyncio.Semaphore(self.max_concurrent)
@@ -591,55 +561,13 @@ class EvalSuite:
 
         async def sem_task(case: EvalCase) -> dict[str, Any]:
             async with semaphore:
-                return await case.run_async(self._client, model, tool_names)  # type: ignore[arg-type]
+                return await case.run(client, model, tool_names)
 
         tasks = [sem_task(case) for case in self.cases]
         case_results = await asyncio.gather(*tasks)
 
         results["cases"] = case_results
         return results
-
-    def run_sync(self, model: str) -> dict[str, Any]:
-        """
-        Run the evaluation suite synchronously.
-
-        Args:
-            model: The model to evaluate.
-
-        Returns:
-            A dictionary containing the evaluation results.
-        """
-        if not self._client:
-            raise ValueError("Client not initialized. Call initialize_client() first.")
-
-        cases: list[dict[str, Any]] = []
-        results = {"model": model, "rubric": self.rubric, "cases": cases}
-        tool_names = list(self.catalog.get_tool_names())
-        for case in self.cases:
-            result = case.run_sync(self._client, model, tool_names)  # type: ignore[arg-type]
-            cases.append(result)
-
-        return results
-
-    def run(self, config: Config, model: str) -> dict[str, Any]:
-        """
-        Run the evaluation suite.
-
-        Args:
-            model: The model to evaluate.
-
-        Returns:
-            A dictionary containing the evaluation results.
-        """
-        if not self._client:
-            self.initialize_client(config)
-
-        if self.max_concurrent > 1:
-            # Run asynchronously with concurrency
-            return asyncio.run(self.run_async(model))
-        else:
-            # Run synchronously
-            return self.run_sync(model)
 
 
 def get_tool_args(chat_completion: Any) -> list[tuple[str, dict[str, Any]]]:
@@ -675,15 +603,15 @@ def compare_tool_name(expected: str, actual: str) -> bool:
     actual_clean = "".join(char for char in actual if char not in separators)
 
     # Compare the cleaned names
-    return expected_clean == actual_clean
+    return expected_clean.lower() == actual_clean.lower()
 
 
 def tool_eval() -> Callable[[Callable], Callable]:
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
-        def wrapper(
+        async def wrapper(
             config: Config,
-            models: list[str],
+            model: str,
             max_concurrency: int = 1,
         ) -> list[dict[str, Any]]:
             suite = func()
@@ -691,8 +619,11 @@ def tool_eval() -> Callable[[Callable], Callable]:
                 raise TypeError("Eval function must return an EvalSuite")
             suite.max_concurrent = max_concurrency
             results = []
-            for model in models:
-                result = suite.run(config, model)
+            async with AsyncArcade(
+                api_key=config.api.key,
+                base_url=config.engine_url,
+            ) as client:
+                result = await suite.run(client, model)  # type: ignore[arg-type]
                 results.append(result)
             return results
 
