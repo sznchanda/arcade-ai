@@ -6,6 +6,7 @@ from arcade.core.errors import ToolExecutionError
 from arcade.core.schema import ToolContext
 from arcade.sdk import tool
 from arcade.sdk.auth import X
+from arcade_x.tools.utils import expand_urls_in_user_description, expand_urls_in_user_url
 
 
 # Users Lookup Tools. See developer docs for additional available query parameters: https://developer.x.com/en/docs/x-api/users/lookup/api-reference
@@ -13,13 +14,13 @@ from arcade.sdk.auth import X
 async def lookup_single_user_by_username(
     context: ToolContext,
     username: Annotated[str, "The username of the X (Twitter) user to look up"],
-) -> Annotated[str, "User information including id, name, username, and description"]:
+) -> Annotated[dict, "User information including id, name, username, and description"]:
     """Look up a user on X (Twitter) by their username."""
 
     headers = {
         "Authorization": f"Bearer {context.authorization.token}",
     }
-    url = f"https://api.x.com/2/users/by/username/{username}?user.fields=created_at,description,id,location,most_recent_tweet_id,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,verified_type,withheld"
+    url = f"https://api.x.com/2/users/by/username/{username}?user.fields=created_at,description,id,location,most_recent_tweet_id,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,verified_type,withheld,entities"
 
     async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers, timeout=10)
@@ -29,8 +30,14 @@ async def lookup_single_user_by_username(
             f"Failed to look up user during execution of '{lookup_single_user_by_username.__name__}' tool. Request returned an error: {response.status_code} {response.text}"
         )
 
+    # Parse the response JSON
+    user_data = response.json()["data"]
+
+    expand_urls_in_user_description(user_data, delete_entities=False)
+    expand_urls_in_user_url(user_data, delete_entities=True)
+
     """
-    Example response.text structure:
+    Example response["data"] structure:
     {
         "data": {
             "verified_type": str,
@@ -55,4 +62,4 @@ async def lookup_single_user_by_username(
         }
     }
     """
-    return response.text
+    return {"data": user_data}

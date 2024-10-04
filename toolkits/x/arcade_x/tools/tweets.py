@@ -6,7 +6,11 @@ from arcade.core.errors import ToolExecutionError
 from arcade.core.schema import ToolContext
 from arcade.sdk import tool
 from arcade.sdk.auth import X
-from arcade_x.tools.utils import get_tweet_url, parse_search_recent_tweets_response
+from arcade_x.tools.utils import (
+    expand_urls_in_tweets,
+    get_tweet_url,
+    parse_search_recent_tweets_response,
+)
 
 TWEETS_URL = "https://api.x.com/2/tweets"
 
@@ -69,7 +73,7 @@ async def search_recent_tweets_by_username(
     max_results: Annotated[
         int, "The maximum number of results to return. Cannot be less than 10"
     ] = 10,
-) -> Annotated[str, "JSON string of the search results"]:
+) -> Annotated[dict, "Dictionary containing the search results"]:
     """Search for recent tweets (last 7 days) on X (Twitter) by username. Includes replies and reposts."""
 
     headers = {
@@ -80,9 +84,7 @@ async def search_recent_tweets_by_username(
         "query": f"from:{username}",
         "max_results": max(max_results, 10),  # X API does not allow 'max_results' less than 10
     }
-    url = (
-        "https://api.x.com/2/tweets/search/recent?expansions=author_id&user.fields=id,name,username"
-    )
+    url = "https://api.x.com/2/tweets/search/recent?expansions=author_id&user.fields=id,name,username,entities&tweet.fields=entities"
 
     async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers, params=params, timeout=10)
@@ -92,9 +94,14 @@ async def search_recent_tweets_by_username(
             f"Failed to search recent tweets during execution of '{search_recent_tweets_by_username.__name__}' tool. Request returned an error: {response.status_code} {response.text}"
         )
 
-    tweets_data = parse_search_recent_tweets_response(response)
+    response_data = response.json()
 
-    return tweets_data
+    # Expand the urls that are in the tweets
+    expand_urls_in_tweets(response_data.get("data", []), delete_entities=True)
+
+    parse_search_recent_tweets_response(response_data)
+
+    return response_data
 
 
 @tool(requires_auth=X(scopes=["tweet.read", "users.read"]))
@@ -109,7 +116,7 @@ async def search_recent_tweets_by_keywords(
     max_results: Annotated[
         int, "The maximum number of results to return. Cannot be less than 10"
     ] = 10,
-) -> Annotated[str, "JSON string of the search results"]:
+) -> Annotated[dict, "Dictionary containing the search results"]:
     """
     Search for recent tweets (last 7 days) on X (Twitter) by required keywords and phrases. Includes replies and reposts
     One of the following input parametersMUST be provided: keywords, phrases
@@ -124,7 +131,7 @@ async def search_recent_tweets_by_keywords(
         "Authorization": f"Bearer {context.authorization.token}",
         "Content-Type": "application/json",
     }
-    query = " ".join([f'"{phrase}"' for phrase in (phrases or [])]) + " " + " "
+    query = "".join([f'"{phrase}" ' for phrase in (phrases or [])])
     if keywords:
         query += " ".join(keywords or [])
 
@@ -132,9 +139,7 @@ async def search_recent_tweets_by_keywords(
         "query": query,
         "max_results": max(max_results, 10),  # X API does not allow 'max_results' less than 10
     }
-    url = (
-        "https://api.x.com/2/tweets/search/recent?expansions=author_id&user.fields=id,name,username"
-    )
+    url = "https://api.x.com/2/tweets/search/recent?expansions=author_id&user.fields=id,name,username,entities&tweet.fields=entities"
 
     async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers, params=params, timeout=10)
@@ -144,6 +149,11 @@ async def search_recent_tweets_by_keywords(
             f"Failed to search recent tweets during execution of '{search_recent_tweets_by_keywords.__name__}' tool. Request returned an error: {response.status_code} {response.text}"
         )
 
-    tweets_data = parse_search_recent_tweets_response(response)
+    response_data = response.json()
 
-    return tweets_data
+    # Expand the urls that are in the tweets
+    expand_urls_in_tweets(response_data.get("data", []), delete_entities=True)
+
+    parse_search_recent_tweets_response(response_data)
+
+    return response_data
