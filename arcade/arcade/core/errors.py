@@ -1,3 +1,4 @@
+import traceback
 from typing import Optional
 
 
@@ -37,10 +38,20 @@ class ToolDefinitionError(ToolError):
 
 
 class ToolRuntimeError(RuntimeError):
-    def __init__(self, message: str, developer_message: Optional[str] = None):
+    def __init__(
+        self,
+        message: str,
+        developer_message: Optional[str] = None,
+    ):
         super().__init__(message)
         self.message = message
         self.developer_message = developer_message
+
+    def traceback_info(self) -> str | None:
+        # return the traceback information of the parent exception
+        if self.__cause__:
+            return "\n".join(traceback.format_exception(self.__cause__))
+        return None
 
 
 class ToolExecutionError(ToolRuntimeError):
@@ -48,8 +59,7 @@ class ToolExecutionError(ToolRuntimeError):
     Raised when there is an error executing a tool.
     """
 
-    def __init__(self, message: str, developer_message: Optional[str] = None):
-        super().__init__(message, developer_message)
+    pass
 
 
 class RetryableToolError(ToolExecutionError):
@@ -74,8 +84,7 @@ class ToolSerializationError(ToolRuntimeError):
     Raised when there is an error executing a tool.
     """
 
-    def __init__(self, message: str, developer_message: Optional[str] = None):
-        super().__init__(message, developer_message)
+    pass
 
 
 class ToolInputError(ToolSerializationError):
@@ -83,8 +92,7 @@ class ToolInputError(ToolSerializationError):
     Raised when there is an error in the input to a tool.
     """
 
-    def __init__(self, message: str, developer_message: Optional[str] = None):
-        super().__init__(message, developer_message)
+    pass
 
 
 class ToolOutputError(ToolSerializationError):
@@ -92,5 +100,4 @@ class ToolOutputError(ToolSerializationError):
     Raised when there is an error in the output of a tool.
     """
 
-    def __init__(self, message: str, developer_message: Optional[str] = None):
-        super().__init__(message, developer_message)
+    pass
