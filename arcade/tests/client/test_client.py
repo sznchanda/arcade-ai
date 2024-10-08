@@ -5,6 +5,7 @@ from httpx import HTTPStatusError, Response
 
 from arcade.client import Arcade, AsyncArcade, AuthProvider
 from arcade.client.errors import (
+    APITimeoutError,
     BadRequestError,
     EngineNotHealthyError,
     InternalServerError,
@@ -111,6 +112,7 @@ def mock_async_response():
         (401, UnauthorizedError),
         (403, PermissionDeniedError),
         (404, NotFoundError),
+        (408, APITimeoutError),
         (500, InternalServerError),
     ],
 )
@@ -166,6 +168,13 @@ def test_arcade_auth_poll_authorization(test_sync_client, mock_response, monkeyp
     """Test Arcade.auth.poll_authorization method."""
     monkeypatch.setattr(Arcade, "_execute_request", lambda *args, **kwargs: AUTH_RESPONSE_DATA)
     auth_response = test_sync_client.auth.status("auth_123")
+    assert auth_response == AuthResponse(**AUTH_RESPONSE_DATA)
+
+
+def test_arcade_auth_long_poll_authorization(test_sync_client, mock_response, monkeypatch):
+    """Test Arcade.auth.poll_authorization method with long polling."""
+    monkeypatch.setattr(Arcade, "_execute_request", lambda *args, **kwargs: AUTH_RESPONSE_DATA)
+    auth_response = test_sync_client.auth.status("auth_123", wait=1)
     assert auth_response == AuthResponse(**AUTH_RESPONSE_DATA)
 
 
@@ -280,6 +289,20 @@ async def test_async_arcade_auth_poll_authorization(
 
     monkeypatch.setattr(AsyncArcade, "_execute_request", mock_execute_request)
     auth_response = await test_async_client.auth.status("auth_123")
+    assert auth_response == AuthResponse(**AUTH_RESPONSE_DATA)
+
+
+@pytest.mark.asyncio
+async def test_async_arcade_auth_long_poll_authorization(
+    test_async_client, mock_async_response, monkeypatch
+):
+    """Test AsyncArcade.auth.poll_authorization method with long polling."""
+
+    async def mock_execute_request(*args, **kwargs):
+        return AUTH_RESPONSE_DATA
+
+    monkeypatch.setattr(AsyncArcade, "_execute_request", mock_execute_request)
+    auth_response = await test_async_client.auth.status("auth_123", wait=1)
     assert auth_response == AuthResponse(**AUTH_RESPONSE_DATA)
 
 
