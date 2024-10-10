@@ -28,14 +28,21 @@ check: ## Run code quality tools.
 .PHONY: test
 test: ## Test the code with pytest
 	@echo "🚀 Testing code: Running pytest"
-	@cd arcade && poetry run pytest -v --cov --cov-config=pyproject.toml --cov-report=xml
+	@cd arcade && poetry run pytest -W ignore -v --cov --cov-config=pyproject.toml --cov-report=xml
 
 .PHONY: test-toolkits
 test-toolkits: ## Iterate over all toolkits and run pytest on each one
 	@echo "🚀 Testing code in toolkits: Running pytest"
 	@for dir in toolkits/*/ ; do \
-		(cd $$dir && poetry run pytest -v --cov --cov-config=pyproject.toml --cov-report=xml || exit 1); \
+		(cd $$dir && poetry run pytest -W ignore -v --cov --cov-config=pyproject.toml --cov-report=xml || exit 1); \
 	done
+
+.PHONY: coverage
+coverage: ## Generate coverage report
+	@echo "coverage report"
+	@cd arcade && coverage report
+	@echo "Generating coverage report"
+	@cd arcade && coverage html
 
 .PHONY: set-version
 set-version: ## Set the version in the pyproject.toml file

@@ -11,27 +11,32 @@ import typer
 from openai import OpenAIError
 from rich.console import Console
 from rich.markup import escape
-from rich.table import Table
 from rich.text import Text
 
 from arcade.cli.authn import LocalAuthCallbackServer, check_existing_login
+from arcade.cli.display import (
+    display_arcade_chat_header,
+    display_config_as_table,
+    display_eval_results,
+    display_tool_details,
+    display_tool_messages,
+    display_tools_table,
+)
 from arcade.cli.launcher import start_servers
 from arcade.cli.utils import (
     OrderCommands,
-    apply_config_overrides,
     create_cli_catalog,
-    display_eval_results,
-    display_tool_messages,
+    get_config_with_overrides,
     get_eval_files,
+    get_tools_from_engine,
     handle_chat_interaction,
     is_authorization_pending,
-    load_eval_suites,  # Import the new function
+    load_eval_suites,
+    log_engine_health,
     validate_and_get_config,
     wait_for_authorization_completion,
 )
 from arcade.client import Arcade
-from arcade.client.errors import EngineNotHealthyError, EngineOfflineError
-from arcade.core.config_model import Config
 
 cli = typer.Typer(
     cls=OrderCommands,
@@ -42,27 +47,6 @@ cli = typer.Typer(
     pretty_exceptions_short=True,
 )
 console = Console()
-
-
-def _get_config_with_overrides(
-    force_tls: bool,
-    force_no_tls: bool,
-    host_input: str | None = None,
-    port_input: int | None = None,
-) -> Config:
-    """
-    Get the config with CLI-specific optional overrides applied.
-    """
-    config = validate_and_get_config()
-
-    if not force_tls and not force_no_tls:
-        tls_input = None
-    elif force_no_tls:
-        tls_input = False
-    else:
-        tls_input = True
-    apply_config_overrides(config, host_input, port_input, tls_input)
-    return config
 
 
 @cli.command(help="Log in to Arcade Cloud", rich_help_panel="User")
@@ -136,44 +120,75 @@ def new(
 
 
 @cli.command(
-    help="Show the installed toolkits",
+    help="Show the installed toolkits or details of a specific tool",
     rich_help_panel="Tool Development",
 )
 def show(
     toolkit: Optional[str] = typer.Option(
         None, "-t", "--toolkit", help="The toolkit to show the tools of"
     ),
+    tool: Optional[str] = typer.Option(
+        None, "-T", "--tool", help="The specific tool to show details for"
+    ),
+    host: Optional[str] = typer.Option(
+        None,
+        "-h",
+        "--host",
+        help="The Arcade Engine address to send chat requests to.",
+    ),
+    port: Optional[int] = typer.Option(
+        None,
+        "-p",
+        "--port",
+        help="The port of the Arcade Engine.",
+    ),
+    force_tls: bool = typer.Option(
+        False,
+        "--tls",
+        help="Whether to force TLS for the connection to the Arcade Engine. If not specified, the connection will use TLS if the engine URL uses a 'https' scheme.",
+    ),
+    force_no_tls: bool = typer.Option(
+        False,
+        "--no-tls",
+        help="Whether to disable TLS for the connection to the Arcade Engine.",
+    ),
     debug: bool = typer.Option(False, "--debug", "-d", help="Show debug information"),
 ) -> None:
     """
-    Show the available tools in an actor or toolkit
+    Show the available toolkits or detailed information about a specific tool.
     """
 
     try:
-        catalog = create_cli_catalog(toolkit=toolkit)
+        if not host:
+            catalog = create_cli_catalog(toolkit=toolkit)
+            tools = [t.definition for t in list(catalog)]
+        else:
+            tools = get_tools_from_engine(host, port, force_tls, force_no_tls, toolkit)
 
-        # Create a table with Rich library
-        table = Table(show_header=True, header_style="bold magenta")
-        table.add_column("Name")
-        table.add_column("Description")
-        table.add_column("Package")
-        table.add_column("Version")
+        if tool:
+            # Display detailed information for the specified tool
+            tool_def = next(
+                (
+                    t
+                    for t in tools
+                    if t.get_fully_qualified_name().name == tool
+                    or str(t.get_fully_qualified_name()) == tool
+                ),
+                None,
+            )
+            if not tool_def:
+                console.print(f"❌ Tool '{tool}' not found.", style="bold red")
+                typer.Exit(code=1)
+            else:
+                display_tool_details(tool_def)
+        else:
+            # Display the list of tools as a table
+            display_tools_table(tools)
 
-        tool_names = catalog.get_tool_names()
-        for tool_name in tool_names:
-            tool = catalog.get_tool(tool_name)
-            package = tool.meta.package if tool.meta.package else tool.meta.toolkit
-            table.add_row(str(tool_name), tool.description, package, tool.version)
-
-        console.print(table)
-
-    # used when debugging a broken package on import.
-    # `arcade show` is the first command used after
-    # a toolkit package is created.
     except Exception as e:
         if debug:
             raise
-        error_message = f"❌ Failed to List tools: {escape(str(e))}"
+        error_message = f"❌ Failed to list tools: {escape(str(e))}"
         console.print(error_message, style="bold red")
 
 
@@ -211,7 +226,7 @@ def chat(
     """
     Chat with a language model.
     """
-    config = _get_config_with_overrides(force_tls, force_no_tls, host, port)
+    config = get_config_with_overrides(force_tls, force_no_tls, host, port)
 
     client = Arcade(api_key=config.api.key, base_url=config.engine_url)
     user_email = config.user.email if config.user else None
@@ -321,73 +336,6 @@ def config(
         raise typer.Exit(code=1)
 
 
-def display_arcade_chat_header(config: Config, stream: bool) -> None:
-    chat_header = Text.assemble(
-        "\n",
-        (
-            "=== Arcade AI Chat ===",
-            "bold magenta underline",
-        ),
-        "\n",
-        "\n",
-        "Chatting with Arcade Engine at ",
-        (
-            config.engine_url,
-            "bold blue",
-        ),
-    )
-    if stream:
-        chat_header.append(" (streaming)")
-    console.print(chat_header)
-
-
-def log_engine_health(client: Arcade) -> None:
-    try:
-        client.health.check()
-
-    except EngineNotHealthyError as e:
-        console.print(
-            "[bold][yellow]⚠️ Warning: "
-            + str(e)
-            + " ("
-            + "[/yellow]"
-            + "[red]"
-            + str(e.status_code)
-            + "[/red]"
-            + "[yellow])[/yellow][/bold]"
-        )
-    except EngineOfflineError:
-        console.print(
-            "⚠️ Warning: Arcade Engine was unreachable. (Is it running?)",
-            style="bold yellow",
-        )
-
-
-def display_config_as_table(config) -> None:  # type: ignore[no-untyped-def]
-    """
-    Display the configuration details as a table using Rich library.
-    """
-    table = Table(show_header=True, header_style="bold magenta")
-    table.add_column("Section")
-    table.add_column("Name")
-    table.add_column("Value")
-
-    for section_name in config.model_dump():
-        section = getattr(config, section_name)
-        if section:
-            section = section.dict()
-            first = True
-            for name, value in section.items():
-                if first:
-                    table.add_row(section_name, name, str(value))
-                    first = False
-                else:
-                    table.add_row("", name, str(value))
-            table.add_row("", "", "")
-
-    console.print(table)
-
-
 @cli.command(help="Run tool calling evaluations", rich_help_panel="Tool Development")
 def evals(
     directory: str = typer.Argument(".", help="Directory containing evaluation files"),
@@ -428,7 +376,7 @@ def evals(
     Find all files starting with 'eval_' in the given directory,
     execute any functions decorated with @tool_eval, and display the results.
     """
-    config = _get_config_with_overrides(force_tls, force_no_tls, host, port)
+    config = get_config_with_overrides(force_tls, force_no_tls, host, port)
 
     models_list = models.split(",")  # Use 'models_list' to avoid shadowing
 

@@ -166,6 +166,17 @@ class ToolResource(BaseResource[ClientT]):
         )
         return AuthResponse(**data)
 
+    def list_tools(self, toolkit: str | None = None) -> list[ToolDefinition]:
+        """
+        List the tools available for a given toolkit and provider.
+        """
+        data = self._client._execute_request(  # type: ignore[attr-defined]
+            "GET",
+            f"{self._resource_path}/list",
+            params={"toolkit": toolkit},
+        )
+        return [ToolDefinition(**tool) for tool in data]
+
 
 class HealthResource(BaseResource[ClientT]):
     """Health check resource."""
@@ -330,6 +341,17 @@ class AsyncToolResource(BaseResource[AsyncArcadeClient]):
             json={"tool_name": tool_name, "tool_version": tool_version, "user_id": user_id},
         )
         return AuthResponse(**data)
+
+    async def list_tools(self, toolkit: str | None = None) -> list[ToolDefinition]:
+        """
+        List the tools available for a given toolkit and provider.
+        """
+        data = await self._client._execute_request(  # type: ignore[attr-defined]
+            "GET",
+            f"{self._resource_path}/list",
+            params={"toolkit": toolkit},
+        )
+        return [ToolDefinition(**tool) for tool in data]
 
 
 class AsyncHealthResource(BaseResource[AsyncArcadeClient]):
