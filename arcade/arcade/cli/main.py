@@ -16,9 +16,9 @@ from rich.markup import escape
 from rich.text import Text
 
 from arcade.cli.authn import LocalAuthCallbackServer, check_existing_login
+from arcade.cli.constants import DEFAULT_CLOUD_HOST, DEFAULT_ENGINE_HOST
 from arcade.cli.display import (
     display_arcade_chat_header,
-    display_config_as_table,
     display_eval_results,
     display_tool_details,
     display_tool_messages,
@@ -27,8 +27,9 @@ from arcade.cli.display import (
 from arcade.cli.launcher import start_servers
 from arcade.cli.utils import (
     OrderCommands,
+    compute_base_url,
     create_cli_catalog,
-    get_config_with_overrides,
+    delete_deprecated_config_file,
     get_eval_files,
     get_tools_from_engine,
     handle_chat_interaction,
@@ -53,7 +54,7 @@ console = Console()
 @cli.command(help="Log in to Arcade Cloud", rich_help_panel="User")
 def login(
     host: str = typer.Option(
-        "cloud.arcade-ai.com",
+        DEFAULT_CLOUD_HOST,
         "-h",
         "--host",
         help="The Arcade Cloud host to log in to.",
@@ -99,9 +100,10 @@ def logout() -> None:
     """
     Logs the user out of Arcade Cloud.
     """
+    delete_deprecated_config_file()
 
-    # If ~/.arcade/arcade.toml exists, delete it
-    config_file_path = os.path.expanduser("~/.arcade/arcade.toml")
+    # If ~/.arcade/credentials.yaml exists, delete it
+    config_file_path = os.path.expanduser("~/.arcade/credentials.yaml")
     if os.path.exists(config_file_path):
         os.remove(config_file_path)
         console.print("You're now logged out.", style="bold")
@@ -136,7 +138,7 @@ def show(
     tool: Optional[str] = typer.Option(
         None, "-t", "--tool", help="The specific tool to show details for"
     ),
-    host: Optional[str] = typer.Option(
+    host: str = typer.Option(
         None,
         "-h",
         "--host",
@@ -207,7 +209,7 @@ def chat(
     prompt: str = typer.Option(None, "--prompt", help="The system prompt to use for the chat."),
     debug: bool = typer.Option(False, "--debug", "-d", help="Show debug information"),
     host: str = typer.Option(
-        None,
+        DEFAULT_ENGINE_HOST,
         "-h",
         "--host",
         help="The Arcade Engine address to send chat requests to.",
@@ -232,9 +234,10 @@ def chat(
     """
     Chat with a language model.
     """
-    config = get_config_with_overrides(force_tls, force_no_tls, host, port)
+    config = validate_and_get_config()
+    base_url = compute_base_url(force_tls, force_no_tls, host, port)
 
-    client = Arcade(api_key=config.api.key, base_url=config.engine_url)
+    client = Arcade(api_key=config.api.key, base_url=base_url)
     user_email = config.user.email if config.user else None
 
     try:
@@ -244,7 +247,7 @@ def chat(
         if prompt:
             history.append({"role": "system", "content": prompt})
 
-        display_arcade_chat_header(config, stream)
+        display_arcade_chat_header(base_url, stream)
 
         # Try to hit /health endpoint on engine and warn if it is down
         log_engine_health(client)
@@ -262,7 +265,7 @@ def chat(
 
             try:
                 # TODO fixup configuration to remove this + "/v1" workaround
-                openai_client = OpenAI(api_key=config.api.key, base_url=config.engine_url + "/v1")
+                openai_client = OpenAI(api_key=config.api.key, base_url=base_url + "/v1")
                 chat_result = handle_chat_interaction(
                     openai_client, model, history, user_email, stream
                 )
@@ -301,48 +304,6 @@ def chat(
         raise typer.Exit()
 
 
-@cli.command(help="Show/edit the local Arcade configuration", rich_help_panel="User")
-def config(
-    action: str = typer.Argument("show", help="The action to take (show/edit)"),
-    key: str = typer.Option(
-        None, "--key", "-k", help="The configuration key to edit (e.g., 'api.key')"
-    ),
-    val: str = typer.Option(None, "--val", "-v", help="The value of the configuration to edit"),
-) -> None:
-    """
-    Show/edit configuration details of the Arcade Engine
-    """
-    config = validate_and_get_config()
-
-    if action == "show":
-        display_config_as_table(config)
-    elif action == "edit":
-        if not key or val is None:
-            console.print("❌ Key and value must be provided for editing.", style="bold red")
-            raise typer.Exit(code=1)
-
-        keys = key.split(".")
-        if len(keys) != 2:
-            console.print("❌ Invalid key format. Use 'section.name' format.", style="bold red")
-            raise typer.Exit(code=1)
-
-        section, name = keys
-        section_dict = getattr(config, section, None)
-        if section_dict and hasattr(section_dict, name):
-            setattr(section_dict, name, val)
-            config.save_to_file()
-            console.print("✅ Configuration updated successfully.", style="bold green")
-        else:
-            console.print(
-                f"❌ Invalid configuration name: {name} in section: {section}",
-                style="bold red",
-            )
-            raise typer.Exit(code=1)
-    else:
-        console.print(f"❌ Invalid action: {action}", style="bold red")
-        raise typer.Exit(code=1)
-
-
 @cli.command(help="Run tool calling evaluations", rich_help_panel="Tool Development")
 def evals(
     directory: str = typer.Argument(".", help="Directory containing evaluation files"),
@@ -360,7 +321,7 @@ def evals(
         help="The models to use for evaluation (default: gpt-4o)",
     ),
     host: str = typer.Option(
-        None,
+        DEFAULT_ENGINE_HOST,
         "-h",
         "--host",
         help="The Arcade Engine address to send chat requests to.",
@@ -386,7 +347,8 @@ def evals(
     Find all files starting with 'eval_' in the given directory,
     execute any functions decorated with @tool_eval, and display the results.
     """
-    config = get_config_with_overrides(force_tls, force_no_tls, host, port)
+    config = validate_and_get_config()
+    base_url = compute_base_url(force_tls, force_no_tls, host, port)
 
     models_list = models.split(",")  # Use 'models_list' to avoid shadowing
 
@@ -398,12 +360,12 @@ def evals(
         console.print(
             Text.assemble(
                 ("\nRunning evaluations against Arcade Engine at ", "bold"),
-                (config.engine_url, "bold blue"),
+                (base_url, "bold blue"),
             )
         )
 
     # Try to hit /health endpoint on engine and warn if it is down
-    with Arcade(api_key=config.api.key, base_url=config.engine_url) as client:
+    with Arcade(api_key=config.api.key, base_url=base_url) as client:
         log_engine_health(client)
 
     # Use the new function to load eval suites
@@ -432,7 +394,12 @@ def evals(
             )
             for model in models_list:
                 task = asyncio.create_task(
-                    suite_func(config=config, model=model, max_concurrency=max_concurrent)
+                    suite_func(
+                        config=config,
+                        base_url=base_url,
+                        model=model,
+                        max_concurrency=max_concurrent,
+                    )
                 )
                 tasks.append(task)
 

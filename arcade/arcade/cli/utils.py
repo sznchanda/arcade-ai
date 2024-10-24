@@ -1,9 +1,13 @@
 import importlib.util
+import ipaddress
+import os
 import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Union, cast
+from urllib.parse import urlparse
 
+import idna
 import typer
 from arcadepy import NOT_GIVEN, APIConnectionError, APIStatusError, APITimeoutError, Arcade
 from arcadepy.types import AuthorizationResponse
@@ -66,25 +70,85 @@ def create_cli_catalog(
     return catalog
 
 
-def get_config_with_overrides(
+def compute_base_url(
     force_tls: bool,
     force_no_tls: bool,
-    host_input: str | None = None,
-    port_input: int | None = None,
-) -> Config:
+    host: str,
+    port: int | None,
+) -> str:
     """
-    Get the config with CLI-specific optional overrides applied.
-    """
-    config = validate_and_get_config()
+    Compute the base URL for the Arcade Engine from the provided overrides.
 
-    if not force_tls and not force_no_tls:
-        tls_input = None
-    elif force_no_tls:
-        tls_input = False
+    force_no_tls takes precedence over force_tls. For example, if both are set to True,
+    the resulting URL will use http.
+
+    The port is included in the URL unless the host is a fully qualified domain name
+    (excluding IP addresses) and no port is specified. Handles IPv4, IPv6, IDNs, and
+    hostnames with underscores.
+
+    This property exists to provide a consistent and correctly formatted URL for
+    connecting to the Arcade Engine, taking into account various configuration
+    options and edge cases. It ensures that:
+
+    1. The correct protocol (http/https) is used based on the TLS setting.
+    2. IPv4 and IPv6 addresses are properly formatted.
+    3. Internationalized Domain Names (IDNs) are correctly encoded.
+    4. Fully Qualified Domain Names (FQDNs) are identified and handled appropriately.
+    5. Ports are included when necessary, respecting common conventions for FQDNs.
+    6. Hostnames with underscores (common in development environments) are supported.
+    7. Pre-existing port specifications in the host are respected.
+
+    The resulting URL is always suffixed with api_version to specify the API version.
+
+    Returns:
+        str: The fully constructed URL for the Arcade Engine.
+    """
+    # Determine TLS setting based on input flags
+    if force_no_tls:
+        is_tls = False
+    elif force_tls:
+        is_tls = True
     else:
-        tls_input = True
-    apply_config_overrides(config, host_input, port_input, tls_input)
-    return config
+        is_tls = host != "localhost"
+
+    # "localhost" defaults to dev port if not specified
+    if host == "localhost" and port is None:
+        port = 9099
+
+    protocol = "https" if is_tls else "http"
+
+    # Handle potential IDNs
+    try:
+        encoded_host = idna.encode(host).decode("ascii")
+    except idna.IDNAError:
+        encoded_host = host
+
+    # Check if the host is a valid IP address (IPv4 or IPv6)
+    try:
+        ipaddress.ip_address(encoded_host)
+        is_ip = True
+    except ValueError:
+        is_ip = False
+
+    # Parse the host, handling potential IPv6 addresses
+    host_for_parsing = f"[{encoded_host}]" if is_ip and ":" in encoded_host else encoded_host
+    parsed_host = urlparse(f"//{host_for_parsing}")
+
+    # Check if the host is a fully qualified domain name (excluding IP addresses)
+    is_fqdn = "." in parsed_host.netloc and not is_ip and "_" not in parsed_host.netloc
+
+    # Handle hosts that might already include a port
+    if ":" in parsed_host.netloc and not is_ip:
+        host, existing_port = parsed_host.netloc.rsplit(":", 1)
+        if existing_port.isdigit():
+            return f"{protocol}://{parsed_host.netloc}"
+
+    if is_fqdn and port is None:
+        return f"{protocol}://{encoded_host}"
+    elif port is not None:
+        return f"{protocol}://{encoded_host}:{port}"
+    else:
+        return f"{protocol}://{encoded_host}"
 
 
 def get_tools_from_engine(
@@ -94,8 +158,9 @@ def get_tools_from_engine(
     force_no_tls: bool = False,
     toolkit: str | None = None,
 ) -> list[ToolDefinition]:
-    config = get_config_with_overrides(force_tls, force_no_tls, host, port)
-    client = Arcade(api_key=config.api.key, base_url=config.engine_url)
+    config = validate_and_get_config()
+    base_url = compute_base_url(force_tls, force_no_tls, host, port)
+    client = Arcade(api_key=config.api.key, base_url=base_url)
 
     tools = []
     page_iterator = client.tools.list(toolkit=toolkit or NOT_GIVEN)
@@ -177,7 +242,6 @@ def markdownify_urls(message: str) -> str:
 
 
 def validate_and_get_config(
-    validate_engine: bool = True,
     validate_api: bool = True,
     validate_user: bool = True,
 ) -> Config:
@@ -185,10 +249,6 @@ def validate_and_get_config(
     Validates the configuration, user, and returns the Config object
     """
     from arcade.core.config import config
-
-    if validate_engine and (not config.engine or not config.engine_url):
-        console.print("❌ Engine configuration not found or URL is missing.", style="bold red")
-        raise typer.Exit(code=1)
 
     if validate_api and (not config.api or not config.api.key):
         console.print(
@@ -204,35 +264,6 @@ def validate_and_get_config(
         raise typer.Exit(code=1)
 
     return config
-
-
-def apply_config_overrides(
-    config: Config, host_input: str | None, port_input: int | None, tls_input: bool | None
-) -> None:
-    """
-    Apply optional config overrides (passed by the user) to the config object.
-    """
-
-    if not config.engine:
-        # Should not happen, validate_and_get_config ensures that `engine` is set
-        raise ValueError("Engine configuration not found in config.")
-
-    # Special case for "localhost" and nothing else specified:
-    # default to dev port and no TLS for convenience
-    if host_input == "localhost":
-        if port_input is None:
-            port_input = 9099
-        if tls_input is None:
-            tls_input = False
-
-    if host_input:
-        config.engine.host = host_input
-
-    if port_input is not None:
-        config.engine.port = port_input
-
-    if tls_input is not None:
-        config.engine.tls = tls_input
 
 
 def log_engine_health(client: Arcade) -> None:
@@ -488,3 +519,48 @@ def load_eval_suites(eval_files: list[Path]) -> list[Callable]:
         eval_suites.extend(eval_suite_funcs)
 
     return eval_suites
+
+
+def create_new_env_file() -> None:
+    """
+    Create a new env file if one doesn't already exist.
+    """
+    env_file = os.path.expanduser("~/.arcade/arcade.env")
+    if not os.path.exists(env_file):
+        template_path = os.path.join(
+            os.path.dirname(__file__), "..", "templates", "arcade.template.env"
+        )
+        os.makedirs(os.path.dirname(env_file), exist_ok=True)
+
+        with open(template_path) as template_file, open(env_file, "w") as new_env_file:
+            template_contents = template_file.read()
+            new_env_file.write(template_contents)
+
+        console.print(f"Created new environment file at {env_file}", style="bold green")
+
+
+def is_config_file_deprecated() -> bool:
+    """
+    Check if the user is using the deprecated config file.
+
+    Returns:
+        bool: True if the user is using the deprecated config file, False otherwise.
+    """
+    deprecated_config_file_path = os.path.expanduser("~/.arcade/arcade.toml")
+    if os.path.exists(deprecated_config_file_path):
+        console.print(
+            f"Deprecation Notice: You are using a deprecated config file at {deprecated_config_file_path}. Please migrate to the new format by running,\n\n\t$ arcade logout && arcade login\n",
+            style="bold yellow",
+        )
+        return True
+    return False
+
+
+def delete_deprecated_config_file() -> None:
+    """
+    Delete the deprecated config file if it exists.
+    """
+    deprecated_config_file_path = os.path.expanduser("~/.arcade/arcade.toml")
+
+    if os.path.exists(deprecated_config_file_path):
+        os.remove(deprecated_config_file_path)
