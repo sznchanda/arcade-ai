@@ -22,11 +22,10 @@ from rich.text import Text
 from typer.core import TyperGroup
 from typer.models import Context
 
-from arcade.core.catalog import ToolCatalog
 from arcade.core.config_model import Config
 from arcade.core.errors import ToolkitLoadError
 from arcade.core.schema import ToolDefinition
-from arcade.core.toolkit import Toolkit
+from arcade.sdk import ToolCatalog, Toolkit
 
 console = Console()
 
