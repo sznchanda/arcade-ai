@@ -1,8 +1,10 @@
 import os
-import time
+from datetime import datetime
 
 from configuration import AgentConfigurable
 from langchain_arcade import ArcadeToolManager
+from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
@@ -16,54 +18,73 @@ toolkit = ArcadeToolManager(api_key=arcade_api_key)
 tools = toolkit.get_tools(langgraph=True)
 tool_node = ToolNode(tools)
 
+PROMPT_TEMPLATE = f"""
+You are a helpful assistant who can use tools to help users with tasks
+Today's date is {datetime.now().strftime("%Y-%m-%d")}
+
+ALL RESPONSES should be in plain text and not markdown.
+"""
+# prompt for the main agent
+prompt = ChatPromptTemplate.from_messages([
+    ("system", PROMPT_TEMPLATE),
+    ("placeholder", "{messages}"),
+])
 # Initialize the language model with your OpenAI API key
-model = ChatOpenAI(model="gpt-4o", api_key=openai_api_key)
-# make the model aware of the tools
-model_with_tools = model.bind_tools(tools)
+model = ChatOpenAI(model="gpt-4o", api_key=openai_api_key).bind_tools(tools)
+prompted_model = prompt | model
 
 
-# Define the agent function that invokes the model
 def call_agent(state):
+    """Define the agent function that invokes the model"""
     messages = state["messages"]
-    response = model_with_tools.invoke(messages)
-    # Return the updated message history
-    return {"messages": [*messages, response]}
+    # replace placeholder with messages from state
+    response = prompted_model.invoke({"messages": messages})
+    return {"messages": [response]}
 
 
-# Function to determine the next step based on the model's response
-def should_continue(state: MessagesState):
+def should_continue(state: MessagesState, config: dict):
+    """Function to determine the next step based on the model's response"""
     last_message = state["messages"][-1]
     if last_message.tool_calls:
-        tool_name = last_message.tool_calls[0]["name"]
-        if toolkit.requires_auth(tool_name):
+        user_id = config["configurable"].get("user_id")
+        tool_name = state["messages"][-1].tool_calls[0]["name"]
+        auth_response = toolkit.authorize(tool_name, user_id)
+        if auth_response.status == "completed":
+            return "tools"
+        else:
             # If the tool requires authorization, proceed to the authorization step
             return "authorization"
-        else:
-            # If no authorization is needed, proceed to execute the tool
-            return "tools"
     # If no tool calls are present, end the workflow
     return END
 
 
-# Function to handle tool authorization
+def wait_for_auth(state: MessagesState):
+    last_message = state["messages"][-1]
+    if isinstance(last_message, HumanMessage):
+        return "agent"
+    return "tools"
+
+
 def authorize(state: MessagesState, config: dict):
+    """Function to handle tool authorization"""
     user_id = config["configurable"].get("user_id")
     tool_name = state["messages"][-1].tool_calls[0]["name"]
     auth_response = toolkit.authorize(tool_name, user_id)
 
-    if auth_response.status == "completed":
-        # Authorization is complete; proceed to the next step
-        return {"messages": state["messages"]}
-    else:
-        # Prompt the user to complete authorization
-        print("Please authorize the application in your browser:")
-        print(auth_response.authorization_url)
-        input("Press Enter after completing authorization...")
-
-        # Poll for authorization status
-        while not toolkit.is_authorized(auth_response.authorization_id):
-            time.sleep(3)
-        return {"messages": state["messages"]}
+    auth_message = (
+        f"Please authorize the application in your browser:\n\n {auth_response.authorization_url}"
+    )
+    tool_call_id = state["messages"][-1].tool_calls[0]["id"]
+    response = ToolMessage(
+        content=auth_message,
+        tool_call_id=tool_call_id,
+    )
+    # Add the new message to the message history and add a new human message
+    # saying that the agent should try again
+    try_message = HumanMessage(
+        content="Please try the previous tool call again now that you are authorized."
+    )
+    return {"messages": [response, try_message]}
 
 
 # Build the workflow graph
@@ -73,12 +94,14 @@ workflow = StateGraph(MessagesState, AgentConfigurable)
 workflow.add_node("agent", call_agent)
 workflow.add_node("tools", tool_node)
 workflow.add_node("authorization", authorize)
+# workflow.add_node("wait_for_auth", wait_for_auth)
 
 # Define the edges and control flow
 workflow.add_edge(START, "agent")
 workflow.add_conditional_edges("agent", should_continue, ["authorization", "tools", END])
-workflow.add_edge("authorization", "tools")
+workflow.add_edge("authorization", "agent")
 workflow.add_edge("tools", "agent")
 
-# Compile the graph
-graph = workflow.compile()
+# Compile the graph with an interrupt after the authorization node
+# so that we can prompt the user to authorize the application
+graph = workflow.compile(interrupt_after=["authorization"])
