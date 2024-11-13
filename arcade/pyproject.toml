@@ -2,7 +2,7 @@
 name = "arcade-ai"
 version = "0.1.1"
 description = "Arcade AI Python SDK and CLI"
-readme = "../README.md"
+readme = "README.md"
 packages = [
     {include="arcade", from="."}
 ]
