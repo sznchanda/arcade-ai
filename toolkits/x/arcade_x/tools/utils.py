@@ -55,6 +55,17 @@ def sanity_check_tweets_data(tweets_data: dict[str, Any]) -> bool:
     return True
 
 
+def expand_long_tweet(tweet_data: dict[str, Any]) -> None:
+    """Expand a long tweet.
+
+    For tweets exceeding 280 characters,
+    replace the truncated tweet text with the full tweet text.
+    """
+    if tweet_data.get("note_tweet"):
+        tweet_data["text"] = tweet_data["note_tweet"]["text"]
+        del tweet_data["note_tweet"]
+
+
 def expand_urls_in_tweets(
     tweets_data: list[dict[str, Any]], delete_entities: bool = True
 ) -> list[dict[str, Any]]:
