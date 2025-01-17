@@ -36,6 +36,7 @@ from arcade.cli.utils import (
     load_eval_suites,
     log_engine_health,
     validate_and_get_config,
+    version_callback,
 )
 
 cli = typer.Typer(
@@ -475,3 +476,17 @@ def workerup(
         error_message = f"❌ Failed to start Arcade Worker: {escape(str(e))}"
         console.print(error_message, style="bold red")
         typer.Exit(code=1)
+
+
+@cli.callback()
+def version(
+    _: bool = typer.Option(
+        None,
+        "-v",
+        "--version",
+        callback=version_callback,
+        is_eager=True,
+        help="Print version and exit.",
+    ),
+) -> None:
+    pass
