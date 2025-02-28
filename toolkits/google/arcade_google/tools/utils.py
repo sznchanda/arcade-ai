@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.mime.text import MIMEText
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 from zoneinfo import ZoneInfo
 
 from arcade.sdk import ToolContext
@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import Resource, build
 
+from arcade_google.tools.constants import DEFAULT_SEARCH_CONTACTS_LIMIT
 from arcade_google.tools.exceptions import GmailToolError, GoogleServiceError
 from arcade_google.tools.models import Day, GmailAction, GmailReplyToWhom, TimeSlot
 
@@ -598,3 +599,39 @@ def build_docs_service(auth_token: Optional[str]) -> Resource:  # type: ignore[n
     """
     auth_token = auth_token or ""
     return build("docs", "v1", credentials=Credentials(auth_token))
+
+
+# Contacts utils
+def build_people_service(auth_token: Optional[str]) -> Resource:  # type: ignore[no-any-unimported]
+    """
+    Build a People service object.
+    """
+    auth_token = auth_token or ""
+    return build("people", "v1", credentials=Credentials(auth_token))
+
+
+def search_contacts(service: Any, query: str, limit: Optional[int]) -> list[dict[str, Any]]:
+    """
+    Search the user's contacts in Google Contacts.
+    """
+    response = (
+        service.people()
+        .searchContacts(
+            query=query,
+            pageSize=limit or DEFAULT_SEARCH_CONTACTS_LIMIT,
+            readMask=",".join([
+                "names",
+                "nicknames",
+                "emailAddresses",
+                "phoneNumbers",
+                "addresses",
+                "organizations",
+                "biographies",
+                "urls",
+                "userDefined",
+            ]),
+        )
+        .execute()
+    )
+
+    return cast(list[dict[str, Any]], response.get("results", []))
