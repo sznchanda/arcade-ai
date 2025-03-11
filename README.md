@@ -11,8 +11,8 @@
 </a>
   <img src="https://img.shields.io/github/last-commit/ArcadeAI/arcade-ai" alt="GitHub last commit">
 </a>
-<a href="https://github.com/arcadeai/arcade-ai/actions/workflow/main.yml">
-<img src="https://img.shields.io/github/actions/workflow/status/arcadeai/arcade-ai/main.yml" alt="GitHub Actions Status">
+<a href="https://github.com/arcadeai/arcade-ai/actions/workflow/on-release-main.yml">
+<img src="https://img.shields.io/github/actions/workflow/status/arcadeai/arcade-ai/check-toolkits.yml" alt="GitHub Actions Status">
 </a>
 <a href="https://img.shields.io/pypi/pyversions/arcade-ai">
   <img src="https://img.shields.io/pypi/pyversions/arcade-ai" alt="Python Version">
