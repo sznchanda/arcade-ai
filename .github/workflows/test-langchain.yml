@@ -1,11 +1,15 @@
-name: Main
+name: Test LangChain Arcade
 
 on:
   push:
     branches:
       - main
+    paths:
+      - "contrib/langchain/**"
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "contrib/langchain/**"
 
 jobs:
   quality:
@@ -14,16 +18,13 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
-      - uses: actions/cache@v4
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
         with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          version: 1.8.5
 
-      - name: Set up the environment
-        uses: ./.github/actions/setup-poetry-env
-
-      - name: Run checks
-        run: make check
+      - name: Install
+        run: cd contrib/langchain && make install && make check
 
   tox:
     runs-on: ubuntu-latest
@@ -45,11 +46,8 @@ jobs:
         with:
           version: 1.8.5
 
-      - name: Load cached venv
-        uses: actions/cache@v4
-        with:
-          path: .tox
-          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('arcade/poetry.lock') }}
+      - name: Install dependencies
+        run: cd contrib/langchain && make install
 
       - name: Install tox
         run: |
@@ -57,10 +55,12 @@ jobs:
           python -m pip install tox tox-gh-actions
 
       - name: Test with tox
-        run: cd arcade && tox
+        run: cd contrib/langchain && tox
 
-      - name: Upload coverage reports to Codecov with GitHub Action on Python 3.10
+      - name: Upload coverage reports to Codecov with GitHub Action on Python 3.11
         uses: codecov/codecov-action@v4.0.1
-        if: ${{ matrix.python-version == '3.10' }}
+        if: ${{ matrix.python-version == '3.11' }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          file: contrib/langchain/coverage.xml
+          flags: langchain
