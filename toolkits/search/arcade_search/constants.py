@@ -37,3 +37,13 @@ DEFAULT_GOOGLE_MAPS_TRAVEL_MODE = GoogleMapsTravelMode(
 YOUTUBE_MAX_DESCRIPTION_LENGTH = 500
 DEFAULT_YOUTUBE_SEARCH_LANGUAGE = os.getenv("ARCADE_YOUTUBE_SEARCH_LANGUAGE")
 DEFAULT_YOUTUBE_SEARCH_COUNTRY = os.getenv("ARCADE_YOUTUBE_SEARCH_COUNTRY")
+
+# ------------------------------------------------------------------------------------------------
+# Google Shopping default constants
+# ------------------------------------------------------------------------------------------------
+DEFAULT_GOOGLE_SHOPPING_LANGUAGE = os.getenv(
+    "ARCADE_GOOGLE_SHOPPING_LANGUAGE", DEFAULT_GOOGLE_LANGUAGE
+)
+DEFAULT_GOOGLE_SHOPPING_COUNTRY = os.getenv(
+    "ARCADE_GOOGLE_SHOPPING_COUNTRY", DEFAULT_GOOGLE_COUNTRY
+)

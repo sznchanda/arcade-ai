@@ -277,6 +277,27 @@ def extract_news_results(
 
 
 # ------------------------------------------------------------------------------------------------
+# Google Shopping utils
+# ------------------------------------------------------------------------------------------------
+def extract_shopping_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "title": result.get("title"),
+            "direct_link": result.get("link"),
+            "google_link": result.get("product_link"),
+            "source": result.get("source"),
+            "price": result.get("price"),
+            "product_rating": result.get("rating"),
+            "product_reviews": result.get("reviews"),
+            "store_rating": result.get("store_rating"),
+            "store_reviews": result.get("store_reviews"),
+            "delivery": result.get("delivery"),
+        }
+        for result in results
+    ]
+
+
+# ------------------------------------------------------------------------------------------------
 # Walmart utils
 # ------------------------------------------------------------------------------------------------
 def extract_walmart_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
