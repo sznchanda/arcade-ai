@@ -9,7 +9,7 @@ from arcade.worker.core.base import (
     BaseWorker,
     Router,
 )
-from arcade.worker.core.common import RequestData
+from arcade.worker.core.common import RequestData, ResponseData, WorkerComponent
 from arcade.worker.fastapi.auth import validate_engine_request
 from arcade.worker.utils import is_async_callable
 
@@ -30,11 +30,20 @@ class FastAPIWorker(BaseWorker):
         """
         Initialize the FastAPIWorker with a FastAPI app instance.
         If no secret is provided, the worker will use the ARCADE_WORKER_SECRET environment variable.
+
+        Args:
+            app: The FastAPI app to host the worker in
+            secret: Optional secret for authorization
+            disable_auth: Whether to disable authorization
+            otel_meter: Optional OpenTelemetry meter
         """
         super().__init__(secret, disable_auth, otel_meter)
         self.app = app
         self.router = FastAPIRouter(app, self)
         self.register_routes(self.router)
+
+        # Initialize components
+        self.components: list[WorkerComponent] = []
 
 
 security = HTTPBearer()  # Authorization: Bearer <xxx>
@@ -81,7 +90,13 @@ class FastAPIRouter(Router):
         return wrapped_handler
 
     def add_route(
-        self, endpoint_path: str, handler: Callable, method: str, require_auth: bool = True
+        self,
+        endpoint_path: str,
+        handler: Callable,
+        method: str,
+        require_auth: bool = True,
+        response_type: type[ResponseData] | None = None,
+        **kwargs: Any,
     ) -> None:
         """
         Add a route to the FastAPI application.
@@ -90,4 +105,7 @@ class FastAPIRouter(Router):
             f"{self.worker.base_path}/{endpoint_path}",
             self._wrap_handler(handler, require_auth),
             methods=[method],
+            response_model=response_type,
+            # **kwargs to pass to FastAPI
+            **kwargs,
         )

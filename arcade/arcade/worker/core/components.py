@@ -1,9 +1,15 @@
-from typing import Any
-
 from opentelemetry import trace
 
-from arcade.core.schema import ToolCallRequest, ToolCallResponse, ToolDefinition
-from arcade.worker.core.common import RequestData, Router, Worker, WorkerComponent
+from arcade.worker.core.common import (
+    CatalogResponse,
+    HealthCheckResponse,
+    RequestData,
+    Router,
+    ToolCallRequest,
+    ToolCallResponse,
+    Worker,
+    WorkerComponent,
+)
 
 
 class CatalogComponent(WorkerComponent):
@@ -14,9 +20,18 @@ class CatalogComponent(WorkerComponent):
         """
         Register the catalog route with the router.
         """
-        router.add_route("tools", self, method="GET")
+        router.add_route(
+            "tools",
+            self,
+            method="GET",
+            response_type=CatalogResponse,
+            operation_id="get_catalog",
+            description="Get the catalog of tools",
+            summary="Get the catalog of tools",
+            tags=["Arcade"],
+        )
 
-    async def __call__(self, request: RequestData) -> list[ToolDefinition]:
+    async def __call__(self, request: RequestData) -> CatalogResponse:
         """
         Handle the request to get the catalog.
         """
@@ -33,7 +48,16 @@ class CallToolComponent(WorkerComponent):
         """
         Register the call tool route with the router.
         """
-        router.add_route("tools/invoke", self, method="POST")
+        router.add_route(
+            "tools/invoke",
+            self,
+            method="POST",
+            response_type=ToolCallResponse,
+            operation_id="call_tool",
+            description="Call a tool",
+            summary="Call a tool",
+            tags=["Arcade"],
+        )
 
     async def __call__(self, request: RequestData) -> ToolCallResponse:
         """
@@ -54,9 +78,19 @@ class HealthCheckComponent(WorkerComponent):
         """
         Register the health check route with the router.
         """
-        router.add_route("health", self, method="GET", require_auth=False)
+        router.add_route(
+            "health",
+            self,
+            method="GET",
+            require_auth=False,
+            response_type=HealthCheckResponse,
+            operation_id="health_check",
+            description="Check the health of the worker",
+            summary="Check the health of the worker",
+            tags=["Arcade"],
+        )
 
-    async def __call__(self, request: RequestData) -> dict[str, Any]:
+    async def __call__(self, request: RequestData) -> HealthCheckResponse:
         """
         Handle the request for a health check.
         """

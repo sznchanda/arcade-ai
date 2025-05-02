@@ -326,7 +326,15 @@ class ToolContext(BaseModel):
         for item in items:
             if item.key.lower() == normalized_key:
                 return item.value
+
         raise ValueError(f"{item_name.capitalize()} {key} not found in context.")
+
+    def set_secret(self, key: str, value: str) -> None:
+        """Set a secret for the tool invocation."""
+        if not self.secrets:
+            self.secrets = []
+        secret = ToolSecretItem(key=str(key), value=str(value))
+        self.secrets.append(secret)
 
 
 class ToolCallRequest(BaseModel):

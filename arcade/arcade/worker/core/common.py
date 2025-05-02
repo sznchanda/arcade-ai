@@ -5,6 +5,11 @@ from pydantic import BaseModel
 
 from arcade.core.schema import ToolCallRequest, ToolCallResponse, ToolDefinition
 
+CatalogResponse = list[ToolDefinition]
+HealthCheckResponse = dict[str, str]
+JSONResponse = dict[str, Any]
+ResponseData = CatalogResponse | ToolCallResponse | HealthCheckResponse
+
 
 class RequestData(BaseModel):
     """
@@ -17,7 +22,7 @@ class RequestData(BaseModel):
     """The path of the request."""
     method: str
     """The method of the request."""
-    body_json: dict | None = None
+    body_json: JSONResponse | None = None
     """The deserialized body of the request (e.g. JSON)"""
 
 
@@ -28,7 +33,13 @@ class Router(ABC):
 
     @abstractmethod
     def add_route(
-        self, endpoint_path: str, handler: Callable, method: str, require_auth: bool = True
+        self,
+        endpoint_path: str,
+        handler: Callable,
+        method: str,
+        require_auth: bool = True,
+        response_type: type[ResponseData] | None = None,
+        **kwargs: Any,
     ) -> None:
         """
         Add a route to the router.
@@ -43,7 +54,7 @@ class Worker(ABC):
     """
 
     @abstractmethod
-    def get_catalog(self) -> list[ToolDefinition]:
+    def get_catalog(self) -> CatalogResponse:
         """
         Get the catalog of tools available in the worker.
         """
@@ -57,7 +68,7 @@ class Worker(ABC):
         pass
 
     @abstractmethod
-    def health_check(self) -> dict[str, Any]:
+    def health_check(self) -> HealthCheckResponse:
         """
         Perform a health check of the worker
         """
@@ -76,7 +87,7 @@ class WorkerComponent(ABC):
         pass
 
     @abstractmethod
-    async def __call__(self, request: RequestData) -> Any:
+    async def __call__(self, request: RequestData) -> ResponseData:
         """
         Handle the request.
         """

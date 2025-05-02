@@ -24,6 +24,7 @@ from arcade.cli.constants import (
     PROD_CLOUD_HOST,
     PROD_ENGINE_HOST,
 )
+from arcade.cli.deployment import Deployment
 from arcade.cli.display import (
     display_arcade_chat_header,
     display_eval_results,
@@ -48,7 +49,6 @@ from arcade.cli.utils import (
     version_callback,
 )
 from arcade.cli.worker import parse_deployment_response
-from arcade.worker.config.deployment import Deployment
 
 cli = typer.Typer(
     cls=OrderCommands,
@@ -61,7 +61,12 @@ cli = typer.Typer(
 )
 
 
-cli.add_typer(worker.app, name="worker", help="Manage workers")
+cli.add_typer(
+    worker.app,
+    name="worker",
+    help="Manage deployments of tool servers (logs, list, etc)",
+    rich_help_panel="Deployment",
+)
 console = Console()
 
 
@@ -192,7 +197,10 @@ def show(
     show_logic(toolkit, tool, host, local, port, force_tls, force_no_tls, debug)
 
 
-@cli.command(help="Start Arcade Chat in the terminal", rich_help_panel="Launch")
+@cli.command(
+    help="Start a chat with a model in the terminal to test tools",
+    rich_help_panel="Tool Development",
+)
 def chat(
     model: str = typer.Option("gpt-4o", "-m", "--model", help="The model to use for prediction."),
     stream: bool = typer.Option(
@@ -439,7 +447,7 @@ def evals(
 
 
 @cli.command(
-    help="Start Arcade Worker serving tools installed in the current python environment",
+    help="Start tool server worker with locally installed tools",
     rich_help_panel="Launch",
 )
 def serve(
@@ -460,19 +468,38 @@ def serve(
     otel_enable: bool = typer.Option(
         False, "--otel-enable", help="Send logs to OpenTelemetry", show_default=True
     ),
+    mcp: bool = typer.Option(
+        False, "--mcp", help="Run as a local MCP server over stdio", show_default=True
+    ),
     debug: bool = typer.Option(False, "--debug", "-d", help="Show debug information"),
 ) -> None:
     """
     Start a local Arcade Worker server.
     """
-    workerup(host, port, disable_auth, otel_enable, debug)
+    from arcade.cli.serve import serve_default_worker
+
+    try:
+        serve_default_worker(
+            host,
+            port,
+            disable_auth=disable_auth,
+            enable_otel=otel_enable,
+            debug=debug,
+            mcp=mcp,
+        )
+    except KeyboardInterrupt:
+        typer.Exit()
+    except Exception as e:
+        error_message = f"❌ Failed to start Arcade Worker: {escape(str(e))}"
+        console.print(error_message, style="bold red")
+        typer.Exit(code=1)
 
 
-@cli.command(help="Launch Arcade Worker and Engine locally", rich_help_panel="Launch")
+@cli.command(help="Launch Arcade - requires 'arcade-engine'", rich_help_panel="Launch")
 def dev(
-    host: str = typer.Option("127.0.0.1", help="Host for the worker server.", show_default=True),
+    host: str = typer.Option("127.0.0.1", help="Host for the toolkit server.", show_default=True),
     port: int = typer.Option(
-        8002, "-p", "--port", help="Port for the worker server.", show_default=True
+        8002, "-p", "--port", help="Port for the toolkit server.", show_default=True
     ),
     engine_config: str = typer.Option(
         None, "-c", "--config", help="Path to the engine configuration file."
@@ -483,7 +510,7 @@ def dev(
     debug: bool = typer.Option(False, "-d", "--debug", help="Show debug information"),
 ) -> None:
     """
-    Start both the worker and engine servers.
+    Start both the toolkit server and engine servers.
     """
     try:
         start_servers(host, port, engine_config, engine_env=env_file, debug=debug)
@@ -493,8 +520,9 @@ def dev(
         typer.Exit(code=1)
 
 
-# TODO: deprecate this next major version
-@cli.command(help="Start a local Arcade Worker server", rich_help_panel="Launch", hidden=True)
+@cli.command(
+    help="Start a server with locally installed Arcade tools", rich_help_panel="Launch", hidden=True
+)
 def workerup(
     host: str = typer.Option(
         "127.0.0.1",
@@ -523,17 +551,21 @@ def workerup(
 
     try:
         serve_default_worker(
-            host, port, disable_auth=disable_auth, enable_otel=otel_enable, debug=debug
+            host,
+            port,
+            disable_auth=disable_auth,
+            enable_otel=otel_enable,
+            debug=debug,
         )
     except KeyboardInterrupt:
         typer.Exit()
     except Exception as e:
-        error_message = f"❌ Failed to start Arcade Worker: {escape(str(e))}"
+        error_message = f"❌ Failed to start Arcade Toolkit Server: {escape(str(e))}"
         console.print(error_message, style="bold red")
         typer.Exit(code=1)
 
 
-@cli.command(help="Deploy worker to Arcade Cloud", rich_help_panel="Deployment")
+@cli.command(help="Deploy toolkits to Arcade Cloud", rich_help_panel="Deployment")
 def deploy(
     deployment_file: str = typer.Option(
         "worker.toml", "--deployment-file", "-d", help="The deployment file to deploy."
