@@ -48,7 +48,6 @@ from arcade.cli.utils import (
     validate_and_get_config,
     version_callback,
 )
-from arcade.cli.worker import parse_deployment_response
 
 cli = typer.Typer(
     cls=OrderCommands,
@@ -631,8 +630,7 @@ def deploy(
             console.log(f"Deploying '{worker.config.id}...'", style="dim")
             try:
                 # Attempt to deploy worker
-                response = worker.request().execute(cloud_client, engine_client)
-                parse_deployment_response(response)
+                worker.request().execute(cloud_client, engine_client)
                 console.log(f"✅ Worker '{worker.config.id}' deployed successfully.", style="dim")
             except Exception as e:
                 console.log(
