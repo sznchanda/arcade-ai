@@ -1,7 +1,7 @@
 import { openai } from "@ai-sdk/openai"
 import { Arcade } from "@arcadeai/arcadejs"
 import { executeOrAuthorizeZodTool, toZodToolSet } from "@arcadeai/arcadejs/lib"
-import { streamText } from "ai"
+import { generateText } from "ai"
 
 const arcade = new Arcade()
 
@@ -34,17 +34,15 @@ const googleTools = toZodToolSet({
     tools: googleToolkit.items,
     client: arcade,
     userId: "<YOUR_USER_ID>", // Your app's internal ID for the user (an email, UUID, etc). It's used internally to identify your user in Arcade
-    executeFactory: executeOrAuthorizeZodTool,
+    executeFactory: executeOrAuthorizeZodTool, // Checks if tool is authorized and executes it, or returns authorization URL if needed
 })
 
-const { textStream } = streamText({
+const result = await generateText({
     model: openai("gpt-4o-mini"),
     prompt: "Read my last email and summarize it in a few sentences",
     tools: googleTools,
     maxSteps: 5,
 })
 
-// Stream the response to the console
-for await (const chunk of textStream) {
-    process.stdout.write(chunk)
-}
+// Log the result
+console.log(result.text)
