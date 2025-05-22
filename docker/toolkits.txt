@@ -1,5 +1,6 @@
 arcade-asana
 arcade-code-sandbox
+arcade-confluence
 arcade-dropbox
 arcade-github
 arcade-google
