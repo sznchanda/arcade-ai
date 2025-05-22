@@ -1,5 +1,6 @@
 import logging
 import os
+import urllib.parse
 from typing import Optional
 
 from fastapi import FastAPI
@@ -23,7 +24,9 @@ class ShutdownError(Exception):
 
 
 class OTELHandler:
-    def __init__(self, app: FastAPI, enable: bool = True, log_level: int = logging.INFO):
+    def __init__(self, enable: bool = True, log_level: int = logging.INFO):
+        self.enable = enable
+        self.log_level = log_level
         self._tracer_provider: Optional[TracerProvider] = None
         self._tracer_span_exporter: Optional[OTLPSpanExporter] = None
         self._meter_provider: Optional[MeterProvider] = None
@@ -33,7 +36,8 @@ class OTELHandler:
         self._log_processor: Optional[BatchLogRecordProcessor] = None
         self.environment = os.environ.get("ARCADE_ENVIRONMENT", "local")
 
-        if enable:
+    def instrument_app(self, app: FastAPI) -> None:
+        if self.enable:
             logging.info(
                 "🔎 Initializing OpenTelemetry. Use environment variables to configure the connection"
             )
@@ -43,8 +47,7 @@ class OTELHandler:
 
             self._init_tracer()
             self._init_metrics()
-            self._init_logging(log_level)
-
+            self._init_logging(self.log_level)
             FastAPIInstrumentor().instrument_app(app)
 
     def _init_tracer(self) -> None:
@@ -91,6 +94,20 @@ class OTELHandler:
 
         handler = LoggingHandler(level=log_level, logger_provider=self._logger_provider)
         logging.getLogger().addHandler(handler)
+
+        # Create a filter for urllib3 connection logs related to OpenTelemetry
+        class OTELConnectionFilter(logging.Filter):
+            def filter(self, record: logging.LogRecord) -> bool:
+                # Filter out connection logs to OpenTelemetry endpoints
+                parsed_url = urllib.parse.urlparse(
+                    os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+                )
+                domain = parsed_url.netloc.split(":")[0]
+                return not (domain and domain in str(getattr(record, "args", ())))
+
+        # Apply the filter to the urllib3 logger
+        urllib3_logger = logging.getLogger("urllib3.connectionpool")
+        urllib3_logger.addFilter(OTELConnectionFilter())
 
     def _shutdown_tracer(self) -> None:
         if self._tracer_span_exporter is None:
