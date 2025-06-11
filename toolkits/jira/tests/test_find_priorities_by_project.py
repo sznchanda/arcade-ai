@@ -1,8 +1,8 @@
-from typing import Callable
+from collections.abc import Callable
 
 import httpx
 import pytest
-from arcade.sdk import ToolContext
+from arcade_tdk import ToolContext
 
 from arcade_jira.exceptions import NotFoundError
 from arcade_jira.utils import clean_priority_dict, find_priorities_by_project
@@ -213,7 +213,7 @@ async def test_find_priorities_by_project_happy_path_with_repeated_priorities_ac
         elif url.endswith(f"/priorityscheme/{priority_scheme2['id']}/priorities"):
             return list_priorities_by_scheme_response2
         else:
-            raise ValueError(f"Unexpected URL: {url}")
+            raise ValueError(f"Unexpected URL: {url}")  # noqa: TRY003
 
     mock_httpx_client.get.side_effect = get_httpx_response
 

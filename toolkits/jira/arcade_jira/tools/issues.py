@@ -1,7 +1,7 @@
 from typing import Annotated, Any, cast
 
-from arcade.sdk import ToolContext, tool
-from arcade.sdk.auth import Atlassian
+from arcade_tdk import ToolContext, tool
+from arcade_tdk.auth import Atlassian
 
 import arcade_jira.cache as cache
 from arcade_jira.client import JiraClient
@@ -213,7 +213,7 @@ async def get_issues_without_id(
 
     if not jql:
         raise JiraToolExecutionError(
-            "No search criteria provided. Please provide at least one argument."
+            message="No search criteria provided. Please provide at least one argument."
         )
 
     body = {
@@ -776,7 +776,7 @@ async def update_issue(
 
     if not request_body["fields"] and not request_body["update"]:
         raise JiraToolExecutionError(
-            "No changes provided. Please provide at least one argument to update the issue."
+            message="No changes provided. Please provide at least one argument to update the issue."
         )
 
     await client.put(f"/issue/{issue}", json_data=request_body, params=params)

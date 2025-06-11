@@ -1,8 +1,8 @@
 import json
-from typing import Callable
+from collections.abc import Callable
 
 import pytest
-from arcade.sdk import ToolContext
+from arcade_tdk import ToolContext
 
 from arcade_jira.exceptions import JiraToolExecutionError, MultipleItemsFoundError, NotFoundError
 from arcade_jira.utils import clean_issue_type_dict, find_unique_issue_type

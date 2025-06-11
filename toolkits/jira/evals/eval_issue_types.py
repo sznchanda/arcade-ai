@@ -1,13 +1,13 @@
 import json
 
-from arcade.sdk import ToolCatalog
-from arcade.sdk.eval import (
+from arcade_evals import (
     EvalRubric,
     EvalSuite,
     ExpectedToolCall,
     tool_eval,
 )
-from arcade.sdk.eval.critic import BinaryCritic
+from arcade_evals.critic import BinaryCritic
+from arcade_tdk import ToolCatalog
 
 import arcade_jira
 from arcade_jira.tools.issues import (
@@ -176,7 +176,9 @@ def list_issue_types_eval_suite() -> EvalSuite:
                         {
                             "id": "10001",
                             "name": "Bug",
-                            "description": "A bug is an error or flaw in a software application or website.",
+                            "description": (
+                                "A bug is an error or flaw in a software application or website."
+                            ),
                         },
                         {
                             "id": "10002",
@@ -195,7 +197,9 @@ def list_issue_types_eval_suite() -> EvalSuite:
             },
             {
                 "role": "assistant",
-                "content": "Here are two issue types in the project 'Engineering':\n\n1. Bug\n2. Task",
+                "content": (
+                    "Here are two issue types in the project 'Engineering':\n\n1. Bug\n2. Task"
+                ),
             },
         ],
     )

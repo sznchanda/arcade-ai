@@ -2,7 +2,7 @@ import asyncio
 import json
 import json.decoder
 from dataclasses import dataclass
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import httpx
 
@@ -60,7 +60,7 @@ class JiraClient:
 
             if len(data) == 0:
                 raise JiraToolExecutionError(
-                    "No cloud ID returned by Atlassian, cannot make API calls"
+                    message="No cloud ID returned by Atlassian, cannot make API calls"
                 )
             if len(data) > 1:
                 cloud_ids_found = json.dumps([
@@ -72,7 +72,7 @@ class JiraClient:
                     for item in data
                 ])
                 raise JiraToolExecutionError(
-                    f"Multiple cloud IDs returned by Atlassian: {cloud_ids_found}. "
+                    message=f"Multiple cloud IDs returned by Atlassian: {cloud_ids_found}. "
                     "Cannot resolve which one to use."
                 )
             return cast(dict[str, Any], data[0])
@@ -118,7 +118,7 @@ class JiraClient:
 
     def _set_request_body(self, kwargs: dict, data: dict | None, json_data: dict | None) -> dict:
         if data and json_data:
-            raise ValueError("Cannot provide both data and json_data")
+            raise ValueError("Cannot provide both data and json_data")  # noqa: TRY003
 
         if data:
             kwargs["data"] = data
@@ -137,8 +137,8 @@ class JiraClient:
     async def get(
         self,
         endpoint: str,
-        params: Optional[dict] = None,
-        headers: Optional[dict] = None,
+        params: dict | None = None,
+        headers: dict | None = None,
     ) -> dict:
         default_headers = {
             "Authorization": f"Bearer {self.auth_token}",
@@ -163,10 +163,10 @@ class JiraClient:
     async def post(
         self,
         endpoint: str,
-        data: Optional[dict] = None,
-        json_data: Optional[dict] = None,
-        files: Optional[dict] = None,
-        headers: Optional[dict] = None,
+        data: dict | None = None,
+        json_data: dict | None = None,
+        files: dict | None = None,
+        headers: dict | None = None,
     ) -> dict:
         default_headers = {
             "Authorization": f"Bearer {self.auth_token}",
@@ -199,10 +199,10 @@ class JiraClient:
     async def put(
         self,
         endpoint: str,
-        data: Optional[dict] = None,
-        json_data: Optional[dict] = None,
-        params: Optional[dict] = None,
-        headers: Optional[dict] = None,
+        data: dict | None = None,
+        json_data: dict | None = None,
+        params: dict | None = None,
+        headers: dict | None = None,
     ) -> dict:
         headers = headers or {}
         headers["Authorization"] = f"Bearer {self.auth_token}"

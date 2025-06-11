@@ -1,13 +1,13 @@
 import json
 
-from arcade.sdk import ToolCatalog
-from arcade.sdk.eval import (
+from arcade_evals import (
     EvalRubric,
     EvalSuite,
     ExpectedToolCall,
     tool_eval,
 )
-from arcade.sdk.eval.critic import BinaryCritic
+from arcade_evals.critic import BinaryCritic
+from arcade_tdk import ToolCatalog
 
 import arcade_jira
 from arcade_jira.critics import CaseInsensitiveBinaryCritic, HasSubstringCritic
@@ -223,7 +223,9 @@ def get_issues_without_id_eval_suite() -> EvalSuite:
         additional_messages=[
             {
                 "role": "user",
-                "content": "Find 2 tasks assigned to John Doe that are in progress, with high priority",
+                "content": (
+                    "Find 2 tasks assigned to John Doe that are in progress, with high priority"
+                ),
             },
             {
                 "role": "assistant",
@@ -316,7 +318,11 @@ def get_issues_without_id_eval_suite() -> EvalSuite:
             },
             {
                 "role": "assistant",
-                "content": "Here are two issues:\n\n1. ENG-101: Implement the message queue\n2. ENG-102: Deploy the message queue system",
+                "content": (
+                    "Here are two issues:\n\n"
+                    "1. ENG-101: Implement the message queue\n"
+                    "2. ENG-102: Deploy the message queue system"
+                ),
             },
         ],
     )
