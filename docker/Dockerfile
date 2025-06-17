@@ -33,7 +33,7 @@ EXPOSE $PORT
 # List wheel files for debugging purposes
 RUN ls -la /app/dist/
 
-# Install the CLI and worker package
+# Install the worker and CLI package
 RUN python -m pip install \
     /app/dist/arcade_serve-*.whl \
     /app/dist/arcade_ai-*.whl
