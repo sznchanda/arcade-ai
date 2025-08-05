@@ -16,7 +16,7 @@ def parse_datetime(dt_str: Optional[str]) -> Optional[datetime]:
     if not dt_str:
         return None
     try:
-        return datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+        return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
     except ValueError:
         return None
 
@@ -95,9 +95,9 @@ def extract_model_data(response_data: dict[str, Any], model_class: type) -> dict
     # Convert string dates to datetime objects
     if isinstance(data, dict):
         for key, value in data.items():
-            if key.endswith('_at') and isinstance(value, str):
+            if key.endswith("_at") and isinstance(value, str):
                 data[key] = parse_datetime(value)
-            elif key in ['amount', 'total', 'price', 'quantity', 'rate'] and value is not None:
+            elif key in ["amount", "total", "price", "quantity", "rate"] and value is not None:
                 data[key] = parse_decimal(value)
 
     return data
@@ -118,9 +118,9 @@ def extract_list_data(response_data: dict[str, Any], item_key: str) -> list[dict
         if isinstance(item, dict):
             # Convert dates and decimals
             for key, value in item.items():
-                if key.endswith('_at') and isinstance(value, str):
+                if key.endswith("_at") and isinstance(value, str):
                     item[key] = parse_datetime(value)
-                elif key in ['amount', 'total', 'price', 'quantity', 'rate'] and value is not None:
+                elif key in ["amount", "total", "price", "quantity", "rate"] and value is not None:
                     item[key] = parse_decimal(value)
             processed_items.append(item)
 
@@ -132,9 +132,20 @@ def format_json_response(data: Any, *, include_extra_data: bool = False) -> str:
     if not include_extra_data and isinstance(data, dict):
         # Filter to important fields only
         important_fields = {
-            'id', 'name', 'first_name', 'last_name', 'email', 'phone',
-            'description', 'status', 'number', 'amount', 'total',
-            'created_at', 'updated_at', 'type'
+            "id",
+            "name",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "description",
+            "status",
+            "number",
+            "amount",
+            "total",
+            "created_at",
+            "updated_at",
+            "type",
         }
 
         if isinstance(data, list):
@@ -163,10 +174,10 @@ def format_json_response(data: Any, *, include_extra_data: bool = False) -> str:
 def validate_contact_type(contact_type: str) -> str:
     """Validate and normalize contact type."""
     contact_type = contact_type.strip().lower()
-    if contact_type in ['person', 'individual']:
-        return 'Person'
-    elif contact_type in ['company', 'organization', 'business']:
-        return 'Company'
+    if contact_type in ["person", "individual"]:
+        return "Person"
+    elif contact_type in ["company", "organization", "business"]:
+        return "Company"
     else:
         raise ValueError(f"Invalid contact type: {contact_type}. Must be 'Person' or 'Company'")
 
@@ -174,23 +185,27 @@ def validate_contact_type(contact_type: str) -> str:
 def validate_matter_status(status: str) -> str:
     """Validate and normalize matter status."""
     status = status.strip().lower()
-    valid_statuses = ['open', 'closed', 'pending']
+    valid_statuses = ["open", "closed", "pending"]
 
     if status in valid_statuses:
         return status.title()
     else:
-        raise ValueError(f"Invalid matter status: {status}. Must be one of: {', '.join(valid_statuses)}")
+        raise ValueError(
+            f"Invalid matter status: {status}. Must be one of: {', '.join(valid_statuses)}"
+        )
 
 
 def validate_activity_type(activity_type: str) -> str:
     """Validate and normalize activity type."""
     activity_type = activity_type.strip().lower()
-    if activity_type in ['time', 'timeentry', 'time_entry']:
-        return 'TimeEntry'
-    elif activity_type in ['expense', 'expenseentry', 'expense_entry']:
-        return 'ExpenseEntry'
+    if activity_type in ["time", "timeentry", "time_entry"]:
+        return "TimeEntry"
+    elif activity_type in ["expense", "expenseentry", "expense_entry"]:
+        return "ExpenseEntry"
     else:
-        raise ValueError(f"Invalid activity type: {activity_type}. Must be 'TimeEntry' or 'ExpenseEntry'")
+        raise ValueError(
+            f"Invalid activity type: {activity_type}. Must be 'TimeEntry' or 'ExpenseEntry'"
+        )
 
 
 def build_search_params(
@@ -200,21 +215,21 @@ def build_search_params(
     offset: Optional[int] = None,
     order_by: Optional[str] = None,
     order_direction: Optional[str] = None,
-    **filters: Any
+    **filters: Any,
 ) -> dict[str, Any]:
     """Build search parameters for API requests."""
     params = {}
 
     if query:
-        params['q'] = query
+        params["q"] = query
     if limit is not None:
-        params['limit'] = min(limit, 200)  # Clio typically limits to 200
+        params["limit"] = min(limit, 200)  # Clio typically limits to 200
     if offset is not None:
-        params['offset'] = offset
+        params["offset"] = offset
     if order_by:
-        params['order_by'] = order_by
-    if order_direction and order_direction.lower() in ['asc', 'desc']:
-        params['order_direction'] = order_direction.lower()
+        params["order_by"] = order_by
+    if order_direction and order_direction.lower() in ["asc", "desc"]:
+        params["order_direction"] = order_direction.lower()
 
     # Add additional filters
     for key, value in filters.items():
@@ -225,37 +240,34 @@ def build_search_params(
 
 
 def paginate_results(
-    data: dict[str, Any],
-    *,
-    limit: Optional[int] = None,
-    offset: int = 0
+    data: dict[str, Any], *, limit: Optional[int] = None, offset: int = 0
 ) -> dict[str, Any]:
     """Handle pagination in results."""
-    meta = data.get('meta', {})
+    meta = data.get("meta", {})
 
     pagination_info = {
-        'total_count': meta.get('count', 0),
-        'current_offset': offset,
-        'limit': limit or 50,
-        'has_more': False
+        "total_count": meta.get("count", 0),
+        "current_offset": offset,
+        "limit": limit or 50,
+        "has_more": False,
     }
 
     # Check if there are more results
-    if 'paging' in meta:
-        paging = meta['paging']
-        pagination_info['has_more'] = 'next' in paging
-        if 'next' in paging:
-            pagination_info['next_url'] = paging['next']
+    if "paging" in meta:
+        paging = meta["paging"]
+        pagination_info["has_more"] = "next" in paging
+        if "next" in paging:
+            pagination_info["next_url"] = paging["next"]
 
-    data['pagination'] = pagination_info
+    data["pagination"] = pagination_info
     return data
 
 
 def create_error_summary(error: Exception) -> dict[str, Any]:
     """Create a standardized error summary."""
     return {
-        'error': True,
-        'error_type': type(error).__name__,
-        'message': str(error),
-        'retry_recommended': getattr(error, 'retry', False)
+        "error": True,
+        "error_type": type(error).__name__,
+        "message": str(error),
+        "retry_recommended": getattr(error, "retry", False),
     }

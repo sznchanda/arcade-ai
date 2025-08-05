@@ -7,7 +7,7 @@ This toolkit provides comprehensive integration with Clio's legal practice manag
 ### Core Capabilities:
 
 - **Contact Management (6 Tools)**: Search, create, update contacts; view activities and matter relationships
-- **Matter Management (8 Tools)**: List, create, update, close matters; manage participants and activities  
+- **Matter Management (8 Tools)**: List, create, update, close matters; manage participants and activities
 - **Time Tracking & Billing (7 Tools)**: Log time entries, track expenses, generate bills with flexible filtering
 - **OAuth 2.0 Authentication**: Secure integration with comprehensive error handling and data validation
 
@@ -19,7 +19,7 @@ This toolkit provides comprehensive integration with Clio's legal practice manag
 create_contact(
     contact_type="Person",
     first_name="Sarah",
-    last_name="Johnson", 
+    last_name="Johnson",
     email="sarah.johnson@email.com",
     phone="555-123-4567",
     title="Small Business Owner"

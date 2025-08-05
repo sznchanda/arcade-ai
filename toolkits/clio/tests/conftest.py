@@ -1,26 +1,16 @@
 """Test configuration and fixtures for Clio toolkit tests."""
 
-from datetime import datetime
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
 import pytest_asyncio
-
+from arcade_clio.exceptions import (
+    ClioRateLimitError,
+)
 from arcade_core.schema import ToolAuthorizationContext
 from arcade_tdk import ToolContext
-
-from arcade_clio.exceptions import (
-    ClioAuthenticationError,
-    ClioError,
-    ClioPermissionError,
-    ClioRateLimitError,
-    ClioResourceNotFoundError,
-    ClioServerError,
-    ClioTimeoutError,
-    ClioValidationError,
-)
 
 
 @pytest.fixture
@@ -44,7 +34,7 @@ def mock_tool_context(mock_auth_context):
 def mock_clio_client():
     """Mock Clio client for testing API interactions."""
     client = AsyncMock()
-    
+
     # Mock successful responses
     client.get_contact.return_value = {
         "contact": {
@@ -55,10 +45,10 @@ def mock_clio_client():
             "primary_email_address": "john.doe@example.com",
             "primary_phone_number": "555-123-4567",
             "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z"
+            "updated_at": "2024-01-01T00:00:00Z",
         }
     }
-    
+
     client.get_matter.return_value = {
         "matter": {
             "id": 67890,
@@ -67,10 +57,10 @@ def mock_clio_client():
             "billable": True,
             "open_date": "2024-01-01",
             "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z"
+            "updated_at": "2024-01-01T00:00:00Z",
         }
     }
-    
+
     client.get.return_value = {
         "contacts": [
             {
@@ -78,15 +68,12 @@ def mock_clio_client():
                 "type": "Person",
                 "first_name": "John",
                 "last_name": "Doe",
-                "primary_email_address": "john.doe@example.com"
+                "primary_email_address": "john.doe@example.com",
             }
         ],
-        "meta": {
-            "count": 1,
-            "paging": {}
-        }
+        "meta": {"count": 1, "paging": {}},
     }
-    
+
     client.post.return_value = {
         "contact": {
             "id": 12346,
@@ -95,10 +82,10 @@ def mock_clio_client():
             "last_name": "Smith",
             "primary_email_address": "jane.smith@example.com",
             "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z"
+            "updated_at": "2024-01-01T00:00:00Z",
         }
     }
-    
+
     client.patch.return_value = {
         "contact": {
             "id": 12345,
@@ -106,10 +93,10 @@ def mock_clio_client():
             "first_name": "John",
             "last_name": "Updated",
             "primary_email_address": "john.updated@example.com",
-            "updated_at": "2024-01-02T00:00:00Z"
+            "updated_at": "2024-01-02T00:00:00Z",
         }
     }
-    
+
     return client
 
 
@@ -125,7 +112,7 @@ def sample_contact_data():
         "primary_phone_number": "555-123-4567",
         "title": "Attorney",
         "created_at": "2024-01-01T00:00:00Z",
-        "updated_at": "2024-01-01T00:00:00Z"
+        "updated_at": "2024-01-01T00:00:00Z",
     }
 
 
@@ -142,7 +129,7 @@ def sample_matter_data():
         "client_id": 12345,
         "responsible_attorney_id": 11111,
         "created_at": "2024-01-01T00:00:00Z",
-        "updated_at": "2024-01-01T00:00:00Z"
+        "updated_at": "2024-01-01T00:00:00Z",
     }
 
 
@@ -160,7 +147,7 @@ def sample_time_entry_data():
         "description": "Reviewed contract terms and drafted amendments",
         "billed": False,
         "created_at": "2024-01-15T00:00:00Z",
-        "updated_at": "2024-01-15T00:00:00Z"
+        "updated_at": "2024-01-15T00:00:00Z",
     }
 
 
@@ -179,7 +166,7 @@ def sample_expense_data():
         "vendor": "County Clerk's Office",
         "billed": False,
         "created_at": "2024-01-15T00:00:00Z",
-        "updated_at": "2024-01-15T00:00:00Z"
+        "updated_at": "2024-01-15T00:00:00Z",
     }
 
 
@@ -199,13 +186,14 @@ def sample_bill_data():
         "paid_total": 0.00,
         "balance": 920.50,
         "created_at": "2024-01-20T00:00:00Z",
-        "updated_at": "2024-01-20T00:00:00Z"
+        "updated_at": "2024-01-20T00:00:00Z",
     }
 
 
 @pytest.fixture
 def mock_httpx_response():
     """Factory for creating mock httpx responses."""
+
     def _make_response(status_code=200, json_data=None, text="", headers=None):
         response = MagicMock(spec=httpx.Response)
         response.status_code = status_code
@@ -214,6 +202,7 @@ def mock_httpx_response():
         response.text = text
         response.headers = headers or {}
         return response
+
     return _make_response
 
 
@@ -233,11 +222,11 @@ def sample_company_contact_data():
                 "city": "New York",
                 "province": "NY",
                 "postal_code": "10001",
-                "country": "US"
+                "country": "US",
             }
         ],
         "created_at": "2024-01-01T00:00:00Z",
-        "updated_at": "2024-01-01T00:00:00Z"
+        "updated_at": "2024-01-01T00:00:00Z",
     }
 
 
@@ -246,35 +235,25 @@ def sample_error_responses(mock_httpx_response):
     """Sample error responses for testing error handling."""
     return {
         "401": mock_httpx_response(
-            401, 
-            {"error": "Unauthorized", "message": "Invalid or expired token"}
+            401, {"error": "Unauthorized", "message": "Invalid or expired token"}
         ),
         "403": mock_httpx_response(
-            403,
-            {"error": "Forbidden", "message": "Insufficient permissions"}
+            403, {"error": "Forbidden", "message": "Insufficient permissions"}
         ),
-        "404": mock_httpx_response(
-            404,
-            {"error": "Not Found", "message": "Resource not found"}
-        ),
+        "404": mock_httpx_response(404, {"error": "Not Found", "message": "Resource not found"}),
         "422": mock_httpx_response(
             422,
             {
                 "error": "Unprocessable Entity",
                 "message": "Validation failed",
-                "errors": {
-                    "first_name": ["can't be blank"],
-                    "email": ["is invalid"]
-                }
-            }
+                "errors": {"first_name": ["can't be blank"], "email": ["is invalid"]},
+            },
         ),
         "429": mock_httpx_response(
-            429,
-            {"error": "Too Many Requests", "message": "Rate limit exceeded"}
+            429, {"error": "Too Many Requests", "message": "Rate limit exceeded"}
         ),
         "500": mock_httpx_response(
-            500,
-            {"error": "Internal Server Error", "message": "Something went wrong"}
+            500, {"error": "Internal Server Error", "message": "Something went wrong"}
         ),
     }
 
@@ -283,20 +262,20 @@ def sample_error_responses(mock_httpx_response):
 async def mock_clio_client_with_errors():
     """Mock Clio client that can simulate various error conditions."""
     client = AsyncMock()
-    
+
     # Track call count for rate limiting simulation
     client.call_count = 0
-    
+
     async def get_with_errors(endpoint, **kwargs):
         client.call_count += 1
-        
+
         # Simulate rate limiting on 3rd call
         if client.call_count == 3:
             raise ClioRateLimitError("Rate limit exceeded")
-        
+
         # Default success response
         return {"contacts": [], "meta": {"count": 0}}
-    
+
     client.get.side_effect = get_with_errors
     return client
 
@@ -311,28 +290,23 @@ def sample_search_results():
                 "type": "Person",
                 "first_name": "John",
                 "last_name": "Doe",
-                "primary_email_address": "john.doe@example.com"
+                "primary_email_address": "john.doe@example.com",
             },
             {
                 "id": 12346,
-                "type": "Person", 
+                "type": "Person",
                 "first_name": "Jane",
                 "last_name": "Smith",
-                "primary_email_address": "jane.smith@example.com"
+                "primary_email_address": "jane.smith@example.com",
             },
             {
                 "id": 22222,
                 "type": "Company",
                 "name": "Acme Corporation",
-                "primary_email_address": "info@acmecorp.com"
-            }
+                "primary_email_address": "info@acmecorp.com",
+            },
         ],
-        "meta": {
-            "count": 3,
-            "paging": {
-                "next": "/api/v4/contacts?offset=50&limit=50"
-            }
-        }
+        "meta": {"count": 3, "paging": {"next": "/api/v4/contacts?offset=50&limit=50"}},
     }
 
 
@@ -350,7 +324,7 @@ def sample_activities_response():
                 "price": Decimal("350.00"),
                 "total": Decimal("875.00"),
                 "description": "Reviewed contract terms",
-                "billed": False
+                "billed": False,
             },
             {
                 "id": 88888,
@@ -362,13 +336,10 @@ def sample_activities_response():
                 "total": Decimal("45.50"),
                 "description": "Filing fees",
                 "vendor": "County Clerk",
-                "billed": False
-            }
+                "billed": False,
+            },
         ],
-        "meta": {
-            "count": 2,
-            "paging": {}
-        }
+        "meta": {"count": 2, "paging": {}},
     }
 
 
@@ -382,30 +353,13 @@ def sample_matter_with_participants():
             "status": "Open",
             "billable": True,
             "open_date": "2024-01-01",
-            "client": {
-                "id": 12345,
-                "name": "John Doe"
-            },
-            "responsible_attorney": {
-                "id": 11111,
-                "name": "Sarah Attorney"
-            },
-            "originating_attorney": {
-                "id": 11112,
-                "name": "Mike Partner"
-            },
+            "client": {"id": 12345, "name": "John Doe"},
+            "responsible_attorney": {"id": 11111, "name": "Sarah Attorney"},
+            "originating_attorney": {"id": 11112, "name": "Mike Partner"},
             "participants": [
-                {
-                    "id": 55555,
-                    "contact_id": 12345,
-                    "role": "client"
-                },
-                {
-                    "id": 55556,
-                    "contact_id": 11111,
-                    "role": "responsible_attorney"
-                }
-            ]
+                {"id": 55555, "contact_id": 12345, "role": "client"},
+                {"id": 55556, "contact_id": 11111, "role": "responsible_attorney"},
+            ],
         }
     }
 
@@ -423,5 +377,5 @@ def legal_validation_test_cases():
         "valid_emails": ["test@example.com", "user.name@law-firm.co.uk"],
         "invalid_emails": ["notanemail", "@example.com", "test@", "test..@example.com"],
         "valid_phones": ["555-123-4567", "(555) 123-4567", "5551234567", "+1-555-123-4567"],
-        "invalid_phones": ["123", "abc-def-ghij", "555-CALL-NOW"]
+        "invalid_phones": ["123", "abc-def-ghij", "555-CALL-NOW"],
     }

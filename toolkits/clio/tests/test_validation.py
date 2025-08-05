@@ -1,24 +1,24 @@
 """Tests for Clio validation utilities."""
 
-import pytest
 from datetime import datetime
 
+import pytest
 from arcade_clio.exceptions import ClioValidationError
 from arcade_clio.validation import (
-    validate_id,
-    validate_email,
-    validate_phone,
+    validate_activity_type,
+    validate_amount,
+    validate_contact_type,
     validate_date_string,
+    validate_email,
+    validate_hours,
+    validate_id,
+    validate_limit_offset,
+    validate_matter_status,
+    validate_optional_string,
+    validate_participant_role,
+    validate_phone,
     validate_positive_number,
     validate_required_string,
-    validate_optional_string,
-    validate_limit_offset,
-    validate_contact_type,
-    validate_matter_status,
-    validate_activity_type,
-    validate_hours,
-    validate_amount,
-    validate_participant_role,
 )
 
 
@@ -35,13 +35,13 @@ class TestBasicValidation:
         """Test ID validation with invalid values."""
         with pytest.raises(ClioValidationError, match="ID must be positive"):
             validate_id(0)
-        
+
         with pytest.raises(ClioValidationError, match="ID must be positive"):
             validate_id(-1)
-        
+
         with pytest.raises(ClioValidationError, match="ID must be an integer"):
             validate_id("123")
-        
+
         with pytest.raises(ClioValidationError, match="ID must be an integer"):
             validate_id(12.5)
 
@@ -58,16 +58,16 @@ class TestBasicValidation:
         """Test email validation with invalid addresses."""
         with pytest.raises(ClioValidationError, match="Invalid email format"):
             validate_email("invalid-email")
-        
+
         with pytest.raises(ClioValidationError, match="Invalid email format"):
             validate_email("@domain.com")
-        
+
         with pytest.raises(ClioValidationError, match="Invalid email format"):
             validate_email("user@")
-        
+
         with pytest.raises(ClioValidationError, match="Invalid email format"):
             validate_email("user.domain.com")
-        
+
         with pytest.raises(ClioValidationError, match="Email must be a string"):
             validate_email(123)
 
@@ -82,12 +82,16 @@ class TestBasicValidation:
 
     def test_validate_phone_invalid(self):
         """Test phone validation with invalid numbers."""
-        with pytest.raises(ClioValidationError, match="Phone number must contain at least 10 digits"):
+        with pytest.raises(
+            ClioValidationError, match="Phone number must contain at least 10 digits"
+        ):
             validate_phone("123")
-        
-        with pytest.raises(ClioValidationError, match="Phone number must contain at least 10 digits"):
+
+        with pytest.raises(
+            ClioValidationError, match="Phone number must contain at least 10 digits"
+        ):
             validate_phone("555-123")
-        
+
         with pytest.raises(ClioValidationError, match="Phone number must be a string"):
             validate_phone(1234567890)
 
@@ -98,7 +102,7 @@ class TestBasicValidation:
         assert result.year == 2024
         assert result.month == 1
         assert result.day == 15
-        
+
         assert validate_date_string(None) is None
         assert validate_date_string("") is None
 
@@ -106,13 +110,13 @@ class TestBasicValidation:
         """Test date string validation with invalid dates."""
         with pytest.raises(ClioValidationError, match="Date must be in YYYY-MM-DD format"):
             validate_date_string("2024/01/15")
-        
+
         with pytest.raises(ClioValidationError, match="Date must be in YYYY-MM-DD format"):
             validate_date_string("01-15-2024")
-        
+
         with pytest.raises(ClioValidationError, match="Date must be in YYYY-MM-DD format"):
             validate_date_string("2024-13-15")  # Invalid month
-        
+
         with pytest.raises(ClioValidationError, match="Date must be a string"):
             validate_date_string(20240115)
 
@@ -127,10 +131,10 @@ class TestBasicValidation:
         """Test positive number validation with invalid values."""
         with pytest.raises(ClioValidationError, match="Value must be non-negative"):
             validate_positive_number(-1)
-        
+
         with pytest.raises(ClioValidationError, match="Value must be non-negative"):
             validate_positive_number(-10.5)
-        
+
         with pytest.raises(ClioValidationError, match="Value must be a number"):
             validate_positive_number("10")
 
@@ -144,13 +148,13 @@ class TestBasicValidation:
         """Test required string validation with invalid values."""
         with pytest.raises(ClioValidationError, match="Value is required"):
             validate_required_string(None)
-        
+
         with pytest.raises(ClioValidationError, match="Value cannot be empty"):
             validate_required_string("")
-        
+
         with pytest.raises(ClioValidationError, match="Value cannot be empty"):
             validate_required_string("   ")
-        
+
         with pytest.raises(ClioValidationError, match="Value must be a string"):
             validate_required_string(123)
 
@@ -176,11 +180,11 @@ class TestPaginationValidation:
         limit, offset = validate_limit_offset(10, 0)
         assert limit == 10
         assert offset == 0
-        
+
         limit, offset = validate_limit_offset(None, None)
         assert limit is None
         assert offset is None
-        
+
         limit, offset = validate_limit_offset(200, 100)
         assert limit == 200
         assert offset == 100
@@ -189,13 +193,13 @@ class TestPaginationValidation:
         """Test limit validation with invalid values."""
         with pytest.raises(ClioValidationError, match="Limit must be positive"):
             validate_limit_offset(0, 0)
-        
+
         with pytest.raises(ClioValidationError, match="Limit must be positive"):
             validate_limit_offset(-1, 0)
-        
+
         with pytest.raises(ClioValidationError, match="Limit cannot exceed 200"):
             validate_limit_offset(201, 0)
-        
+
         with pytest.raises(ClioValidationError, match="Limit must be an integer"):
             validate_limit_offset("10", 0)
 
@@ -203,7 +207,7 @@ class TestPaginationValidation:
         """Test offset validation with invalid values."""
         with pytest.raises(ClioValidationError, match="Offset must be non-negative"):
             validate_limit_offset(10, -1)
-        
+
         with pytest.raises(ClioValidationError, match="Offset must be an integer"):
             validate_limit_offset(10, "0")
 
@@ -217,7 +221,7 @@ class TestDomainValidation:
         assert validate_contact_type("Person") == "Person"
         assert validate_contact_type("PERSON") == "Person"
         assert validate_contact_type("individual") == "Person"
-        
+
         assert validate_contact_type("company") == "Company"
         assert validate_contact_type("Company") == "Company"
         assert validate_contact_type("organization") == "Company"
@@ -227,7 +231,7 @@ class TestDomainValidation:
         """Test contact type validation with invalid values."""
         with pytest.raises(ClioValidationError, match="Invalid contact type"):
             validate_contact_type("invalid")
-        
+
         with pytest.raises(ClioValidationError, match="Contact type must be a string"):
             validate_contact_type(123)
 
@@ -236,7 +240,7 @@ class TestDomainValidation:
         assert validate_matter_status("open") == "Open"
         assert validate_matter_status("Open") == "Open"
         assert validate_matter_status("OPEN") == "Open"
-        
+
         assert validate_matter_status("closed") == "Closed"
         assert validate_matter_status("pending") == "Pending"
 
@@ -244,7 +248,7 @@ class TestDomainValidation:
         """Test matter status validation with invalid values."""
         with pytest.raises(ClioValidationError, match="Invalid matter status"):
             validate_matter_status("invalid")
-        
+
         with pytest.raises(ClioValidationError, match="Matter status must be a string"):
             validate_matter_status(123)
 
@@ -254,7 +258,7 @@ class TestDomainValidation:
         assert validate_activity_type("timeentry") == "TimeEntry"
         assert validate_activity_type("time_entry") == "TimeEntry"
         assert validate_activity_type("TimeEntry") == "TimeEntry"
-        
+
         assert validate_activity_type("expense") == "ExpenseEntry"
         assert validate_activity_type("expenseentry") == "ExpenseEntry"
         assert validate_activity_type("expense_entry") == "ExpenseEntry"
@@ -263,7 +267,7 @@ class TestDomainValidation:
         """Test activity type validation with invalid values."""
         with pytest.raises(ClioValidationError, match="Invalid activity type"):
             validate_activity_type("invalid")
-        
+
         with pytest.raises(ClioValidationError, match="Activity type must be a string"):
             validate_activity_type(123)
 
@@ -278,13 +282,13 @@ class TestDomainValidation:
         """Test hours validation with invalid values."""
         with pytest.raises(ClioValidationError, match="Hours must be greater than 0"):
             validate_hours(0)
-        
+
         with pytest.raises(ClioValidationError, match="Hours must be greater than 0"):
             validate_hours(-1)
-        
+
         with pytest.raises(ClioValidationError, match="Hours cannot exceed 24"):
             validate_hours(25)
-        
+
         with pytest.raises(ClioValidationError, match="Hours must be a number"):
             validate_hours("8")
 
@@ -299,10 +303,10 @@ class TestDomainValidation:
         """Test amount validation with invalid values."""
         with pytest.raises(ClioValidationError, match="Amount must be non-negative"):
             validate_amount(-1)
-        
+
         with pytest.raises(ClioValidationError, match="Amount exceeds reasonable limit"):
             validate_amount(2000000)
-        
+
         with pytest.raises(ClioValidationError, match="Amount must be a number"):
             validate_amount("100")
 
@@ -317,6 +321,6 @@ class TestDomainValidation:
         """Test participant role validation with invalid values."""
         with pytest.raises(ClioValidationError, match="Invalid role"):
             validate_participant_role("invalid")
-        
+
         with pytest.raises(ClioValidationError, match="Role must be a string"):
             validate_participant_role(123)

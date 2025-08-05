@@ -1,25 +1,24 @@
 """LLM evaluation suite for Clio billing and time tracking tools."""
 
+import arcade_clio
 from arcade_evals import EvalSuite, ExpectedToolCall, tool_eval
 from arcade_tdk import ToolCatalog
-
-import arcade_clio
 
 
 @tool_eval()
 def eval_clio_billing() -> EvalSuite:
     """Evaluation suite for Clio billing and time tracking functionality."""
-    
+
     # Create tool catalog
     catalog = ToolCatalog()
     catalog.add_module(arcade_clio)
-    
+
     # Create evaluation suite
     suite = EvalSuite(
         name="Clio Billing and Time Tracking",
         catalog=catalog,
     )
-    
+
     # Test 1: Log time entry
     suite.add_case(
         name="Log billable time",
@@ -31,12 +30,12 @@ def eval_clio_billing() -> EvalSuite:
                     "matter_id": 67890,
                     "hours": 2.5,
                     "date": "{{TODAYS_DATE}}",
-                    "description": "Contract review and negotiation"
-                }
+                    "description": "Contract review and negotiation",
+                },
             )
-        ]
+        ],
     )
-    
+
     # Test 2: Log time with specific rate
     suite.add_case(
         name="Log time with custom rate",
@@ -49,12 +48,12 @@ def eval_clio_billing() -> EvalSuite:
                     "hours": 3.0,
                     "date": "2024-01-15",
                     "description": "Senior partner work",
-                    "rate": 450.0
-                }
+                    "rate": 450.0,
+                },
             )
-        ]
+        ],
     )
-    
+
     # Test 3: Legal billing increments
     suite.add_case(
         name="Six-minute billing increment",
@@ -66,12 +65,12 @@ def eval_clio_billing() -> EvalSuite:
                     "matter_id": 67890,
                     "hours": 0.25,
                     "date": "{{TODAYS_DATE}}",
-                    "description": "Quick client phone call"
-                }
+                    "description": "Quick client phone call",
+                },
             )
-        ]
+        ],
     )
-    
+
     # Test 4: Create expense
     suite.add_case(
         name="Log filing fees expense",
@@ -84,12 +83,12 @@ def eval_clio_billing() -> EvalSuite:
                     "amount": 125.0,
                     "date": "2024-01-20",
                     "description": "Court filing fees",
-                    "vendor": "County Clerk"
-                }
+                    "vendor": "County Clerk",
+                },
             )
-        ]
+        ],
     )
-    
+
     # Test 5: Update time entry
     suite.add_case(
         name="Correct time entry hours",
@@ -100,27 +99,23 @@ def eval_clio_billing() -> EvalSuite:
                 args={
                     "time_entry_id": 99999,
                     "hours": 3.0,
-                    "description": "Deposition preparation and attendance"
-                }
+                    "description": "Deposition preparation and attendance",
+                },
             )
-        ]
+        ],
     )
-    
+
     # Test 6: Get unbilled time entries
     suite.add_case(
         name="Review unbilled time",
         user_message="Show me all unbilled time entries for matter 67890",
         expected_tool_calls=[
             ExpectedToolCall(
-                func=arcade_clio.get_time_entries,
-                args={
-                    "matter_id": 67890,
-                    "billed": False
-                }
+                func=arcade_clio.get_time_entries, args={"matter_id": 67890, "billed": False}
             )
-        ]
+        ],
     )
-    
+
     # Test 7: Get time entries by date range
     suite.add_case(
         name="Time entries for date range",
@@ -128,15 +123,11 @@ def eval_clio_billing() -> EvalSuite:
         expected_tool_calls=[
             ExpectedToolCall(
                 func=arcade_clio.get_time_entries,
-                args={
-                    "matter_id": 67890,
-                    "start_date": "2024-01-01",
-                    "end_date": "2024-01-31"
-                }
+                args={"matter_id": 67890, "start_date": "2024-01-01", "end_date": "2024-01-31"},
             )
-        ]
+        ],
     )
-    
+
     # Test 8: Create bill
     suite.add_case(
         name="Generate invoice",
@@ -149,27 +140,23 @@ def eval_clio_billing() -> EvalSuite:
                     "include_unbilled_time": True,
                     "include_unbilled_expenses": True,
                     "issued_date": "{{TODAYS_DATE}}",
-                    "due_date": "{{DATE_30_DAYS_FROM_NOW}}"
-                }
+                    "due_date": "{{DATE_30_DAYS_FROM_NOW}}",
+                },
             )
-        ]
+        ],
     )
-    
+
     # Test 9: Get expenses with vendor filter
     suite.add_case(
         name="Filter expenses by vendor",
         user_message="Show all expenses from FedEx for matter 67890",
         expected_tool_calls=[
             ExpectedToolCall(
-                func=arcade_clio.get_expenses,
-                args={
-                    "matter_id": 67890,
-                    "vendor": "FedEx"
-                }
+                func=arcade_clio.get_expenses, args={"matter_id": 67890, "vendor": "FedEx"}
             )
-        ]
+        ],
     )
-    
+
     # Test 10: Complex billing workflow
     suite.add_case(
         name="Complete billing workflow",
@@ -181,8 +168,8 @@ def eval_clio_billing() -> EvalSuite:
                     "matter_id": 67890,
                     "hours": 1.5,
                     "date": "{{TODAYS_DATE}}",
-                    "description": "Document review"
-                }
+                    "description": "Document review",
+                },
             ),
             ExpectedToolCall(
                 func=arcade_clio.create_expense,
@@ -190,35 +177,29 @@ def eval_clio_billing() -> EvalSuite:
                     "matter_id": 67890,
                     "amount": 50.0,
                     "date": "{{TODAYS_DATE}}",
-                    "description": "Copying expense"
-                }
+                    "description": "Copying expense",
+                },
             ),
             ExpectedToolCall(
                 func=arcade_clio.create_bill,
                 args={
                     "matter_id": 67890,
                     "include_unbilled_time": True,
-                    "include_unbilled_expenses": True
-                }
-            )
-        ]
+                    "include_unbilled_expenses": True,
+                },
+            ),
+        ],
     )
-    
+
     # Test 11: Get bills by status
     suite.add_case(
         name="Review sent bills",
         user_message="Show me all bills that have been sent but not paid for matter 67890",
         expected_tool_calls=[
-            ExpectedToolCall(
-                func=arcade_clio.get_bills,
-                args={
-                    "matter_id": 67890,
-                    "state": "sent"
-                }
-            )
-        ]
+            ExpectedToolCall(func=arcade_clio.get_bills, args={"matter_id": 67890, "state": "sent"})
+        ],
     )
-    
+
     # Test 12: Time entry with activity type
     suite.add_case(
         name="Log research time",
@@ -231,12 +212,12 @@ def eval_clio_billing() -> EvalSuite:
                     "hours": 4.0,
                     "date": "{{TODAYS_DATE}}",
                     "description": "Legal research - case law review",
-                    "note": "Detailed notes about case law review"
-                }
+                    "note": "Detailed notes about case law review",
+                },
             )
-        ]
+        ],
     )
-    
+
     # Test 13: Expense categories
     suite.add_case(
         name="Categorized expense",
@@ -250,12 +231,12 @@ def eval_clio_billing() -> EvalSuite:
                     "date": "{{TODAYS_DATE}}",
                     "description": "Expert witness fee - Dr. Smith consultation",
                     "vendor": "Dr. Smith",
-                    "category": "Expert Fees"
-                }
+                    "category": "Expert Fees",
+                },
             )
-        ]
+        ],
     )
-    
+
     # Test 14: Detailed bill parameters
     suite.add_case(
         name="Bill with specific parameters",
@@ -268,12 +249,12 @@ def eval_clio_billing() -> EvalSuite:
                     "include_unbilled_time": True,
                     "include_unbilled_expenses": False,
                     "discount_percentage": 10.0,
-                    "state": "draft"
-                }
+                    "state": "draft",
+                },
             )
-        ]
+        ],
     )
-    
+
     # Test 15: Time tracking patterns
     suite.add_case(
         name="Common legal tasks",
@@ -285,27 +266,27 @@ def eval_clio_billing() -> EvalSuite:
                     "matter_id": 67890,
                     "hours": 0.1,
                     "date": "{{TODAYS_DATE}}",
-                    "description": "Reviewing and responding to client email"
-                }
+                    "description": "Reviewing and responding to client email",
+                },
             )
-        ]
+        ],
     )
-    
+
     return suite
 
 
 @tool_eval()
 def eval_clio_billing_edge_cases() -> EvalSuite:
     """Evaluation suite for billing edge cases and complex scenarios."""
-    
+
     catalog = ToolCatalog()
     catalog.add_module(arcade_clio)
-    
+
     suite = EvalSuite(
         name="Clio Billing Edge Cases",
         catalog=catalog,
     )
-    
+
     # Test 1: Natural language time conversion
     suite.add_case(
         name="Convert minutes to hours",
@@ -317,12 +298,12 @@ def eval_clio_billing_edge_cases() -> EvalSuite:
                     "matter_id": 67890,
                     "hours": 1.5,
                     "date": "{{TODAYS_DATE}}",
-                    "description": "Court appearance"
-                }
+                    "description": "Court appearance",
+                },
             )
-        ]
+        ],
     )
-    
+
     # Test 2: Multiple billing rates
     suite.add_case(
         name="Different staff rates",
@@ -335,8 +316,8 @@ def eval_clio_billing_edge_cases() -> EvalSuite:
                     "hours": 2.0,
                     "date": "{{TODAYS_DATE}}",
                     "description": "Paralegal work",
-                    "rate": 150.0
-                }
+                    "rate": 150.0,
+                },
             ),
             ExpectedToolCall(
                 func=arcade_clio.create_time_entry,
@@ -345,12 +326,12 @@ def eval_clio_billing_edge_cases() -> EvalSuite:
                     "hours": 1.0,
                     "date": "{{TODAYS_DATE}}",
                     "description": "Partner review",
-                    "rate": 500.0
-                }
-            )
-        ]
+                    "rate": 500.0,
+                },
+            ),
+        ],
     )
-    
+
     # Test 3: Expense reimbursement tracking
     suite.add_case(
         name="Reimbursable expenses",
@@ -363,12 +344,12 @@ def eval_clio_billing_edge_cases() -> EvalSuite:
                     "amount": 200.0,
                     "date": "{{TODAYS_DATE}}",
                     "description": "Travel expenses - mileage and parking for client meeting",
-                    "category": "Travel"
-                }
+                    "category": "Travel",
+                },
             )
-        ]
+        ],
     )
-    
+
     # Test 4: Billing cycle management
     suite.add_case(
         name="Monthly billing cycle",
@@ -380,8 +361,8 @@ def eval_clio_billing_edge_cases() -> EvalSuite:
                     "matter_id": 67890,
                     "billed": False,
                     "start_date": "{{FIRST_DAY_OF_MONTH}}",
-                    "end_date": "{{LAST_DAY_OF_MONTH}}"
-                }
+                    "end_date": "{{LAST_DAY_OF_MONTH}}",
+                },
             ),
             ExpectedToolCall(
                 func=arcade_clio.get_expenses,
@@ -389,24 +370,17 @@ def eval_clio_billing_edge_cases() -> EvalSuite:
                     "matter_id": 67890,
                     "billed": False,
                     "start_date": "{{FIRST_DAY_OF_MONTH}}",
-                    "end_date": "{{LAST_DAY_OF_MONTH}}"
-                }
-            )
-        ]
+                    "end_date": "{{LAST_DAY_OF_MONTH}}",
+                },
+            ),
+        ],
     )
-    
+
     # Test 5: Legal terminology for billing
     suite.add_case(
         name="Retainer billing",
         user_message="Apply $1000 from the client's retainer to the outstanding balance on bill 77777",
-        expected_tool_calls=[
-            ExpectedToolCall(
-                func=arcade_clio.get_bills,
-                args={
-                    "bill_id": 77777
-                }
-            )
-        ]
+        expected_tool_calls=[ExpectedToolCall(func=arcade_clio.get_bills, args={"bill_id": 77777})],
     )
-    
+
     return suite

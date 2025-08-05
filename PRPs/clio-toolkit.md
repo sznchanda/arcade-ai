@@ -73,7 +73,7 @@ Complete the existing toolkit with 21+ tools across 3 main categories:
 toolkits/clio/
 ├── arcade_clio/
 │   ├── __init__.py              # ✅ EXISTS - needs completion
-│   ├── client.py                # ✅ EXISTS - needs completion  
+│   ├── client.py                # ✅ EXISTS - needs completion
 │   ├── exceptions.py            # ✅ EXISTS - needs completion
 │   ├── models.py                # ✅ EXISTS - comprehensive Pydantic models
 │   ├── utils.py                 # ✅ EXISTS - needs completion
@@ -81,7 +81,7 @@ toolkits/clio/
 │   └── tools/
 │       ├── __init__.py          # ✅ EXISTS - needs exports
 │       ├── billing.py           # ✅ EXISTS - 7 tools implemented
-│       ├── contacts.py          # ✅ EXISTS - 6 tools implemented  
+│       ├── contacts.py          # ✅ EXISTS - 6 tools implemented
 │       └── matters.py           # ✅ EXISTS - 8 tools implemented
 ├── tests/
 │   ├── __init__.py              # ✅ EXISTS
@@ -90,7 +90,7 @@ toolkits/clio/
 │   ├── test_contacts.py         # ✅ EXISTS - basic tests
 │   └── test_validation.py       # ✅ EXISTS - basic tests
 ├── evals/
-│   ├── __init__.py              # ✅ EXISTS  
+│   ├── __init__.py              # ✅ EXISTS
 │   └── eval_clio_contacts.py    # ✅ EXISTS - basic eval
 └── pyproject.toml               # ✅ EXISTS - proper configuration
 ```
@@ -260,7 +260,7 @@ RUN complete validation suite:
 # Task 1: Complete HTTP Client Implementation
 class ClioClient:
     BASE_URL = "https://app.clio.com/api/v4/"
-    
+
     def __init__(self, context: ToolContext) -> None:
         self.context = context
         self._client: Optional[httpx.AsyncClient] = None
@@ -271,28 +271,28 @@ class ClioClient:
             "X-API-VERSION": "4.0.0",
             "Content-Type": "application/json",
         }
-        
+
         self._client = httpx.AsyncClient(
             base_url=self.BASE_URL,
             timeout=httpx.Timeout(30.0),
             headers=headers,
         )
         return self
-    
+
     async def get(self, endpoint: str, *, params: Dict[str, Any] = None):
         """GET request with automatic retry for rate limits."""
         for attempt in range(3):  # Retry logic
             try:
                 response = await self._client.get(endpoint, params=params)
-                
+
                 if response.status_code == 429:  # Rate limited
                     delay = 2 ** attempt  # Exponential backoff
                     await asyncio.sleep(delay)
                     continue
-                    
+
                 response.raise_for_status()
                 return response.json()
-                
+
             except httpx.HTTPStatusError as e:
                 # Map to specific Clio exceptions
                 if e.response.status_code == 401:
@@ -300,7 +300,7 @@ class ClioClient:
                 elif e.response.status_code == 404:
                     raise ClioResourceNotFoundError(f"Resource not found: {endpoint}")
                 # ... other mappings
-                
+
         raise ClioRateLimitError("Rate limit exceeded after retries")
 
 # Task 4: Enhanced Validation Functions
@@ -308,24 +308,24 @@ def validate_contact_type(value: str) -> str:
     """Validate and normalize contact type following legal standards."""
     if not value or not isinstance(value, str):
         raise ClioValidationError("Contact type is required")
-    
+
     normalized = value.strip().title()  # "person" → "Person"
     if normalized not in ["Person", "Company"]:
         raise ClioValidationError("Contact type must be 'Person' or 'Company'")
-    
+
     return normalized
 
 def validate_hours(value: float) -> float:
     """Validate billable hours with legal industry standards."""
     if not isinstance(value, (int, float)):
         raise ClioValidationError("Hours must be a number")
-    
+
     if value <= 0:
         raise ClioValidationError("Hours must be greater than 0")
-    
+
     if value > 24:
         raise ClioValidationError("Hours cannot exceed 24 per day")
-    
+
     # Legal industry often uses 6-minute increments (0.1 hour)
     return round(float(value), 1)
 
@@ -342,17 +342,17 @@ async def create_contact(
             # Validate inputs using validation functions
             contact_type = validate_contact_type(contact_type)
             # ... other validations
-            
+
             # Business logic validation (already implemented)
             if contact_type == "Person" and not (first_name or last_name):
                 raise ClioValidationError("Person contacts require first or last name")
-            
+
             # Make API call with proper error handling
             response = await client.post("contacts", json_data=payload)
             contact_data = extract_model_data(response, Contact)
-            
+
             return format_json_response(contact_data, include_extra_data=True)
-            
+
         except ClioError:
             raise  # Re-raise Clio-specific errors
         except Exception as e:
@@ -413,7 +413,7 @@ def test_billing_decimal_precision(mock_tool_context, mock_clio_client):
         date="2024-01-15",
         description="Contract review"
     )
-    
+
     # Verify Decimal precision preserved
     data = json.loads(result)
     assert data["price"] == "350.75"  # String representation of Decimal
@@ -454,16 +454,16 @@ from arcade_clio.tools.billing import create_time_entry, create_bill
 async def test_legal_workflow():
     # 1. Create client contact
     client = await create_contact(context, contact_type='Person', first_name='Test', last_name='Client')
-    
+
     # 2. Create matter for client
     matter = await create_matter(context, description='Test Case', client_id=client_id)
-    
+
     # 3. Log billable time
     time_entry = await create_time_entry(context, matter_id=matter_id, hours=2.5, date='2024-01-15')
-    
+
     # 4. Generate bill
     bill = await create_bill(context, matter_id=matter_id, include_unbilled_time=True)
-    
+
     print('Legal workflow test successful')
 
 asyncio.run(test_legal_workflow())

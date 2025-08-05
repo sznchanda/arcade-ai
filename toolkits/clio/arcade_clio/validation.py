@@ -29,7 +29,7 @@ def validate_email(email: Optional[str]) -> Optional[str]:
         return None
 
     # Basic email validation regex
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     if not re.match(email_pattern, email):
         raise ClioValidationError(f"Invalid email format: {email}")
 
@@ -49,10 +49,10 @@ def validate_phone(phone: Optional[str]) -> Optional[str]:
         return None
 
     # Remove common phone formatting characters
-    cleaned_phone = re.sub(r'[^\d+\-\(\)\s]', '', phone)
+    cleaned_phone = re.sub(r"[^\d+\-\(\)\s]", "", phone)
 
     # Basic validation - at least 10 digits
-    digits_only = re.sub(r'\D', '', cleaned_phone)
+    digits_only = re.sub(r"\D", "", cleaned_phone)
     if len(digits_only) < 10:
         raise ClioValidationError(f"Phone number must contain at least 10 digits: {phone}")
 
@@ -118,7 +118,9 @@ def validate_optional_string(value: Optional[str], name: str = "Value") -> Optio
     return value if value else None
 
 
-def validate_limit_offset(limit: Optional[int], offset: Optional[int]) -> tuple[Optional[int], Optional[int]]:
+def validate_limit_offset(
+    limit: Optional[int], offset: Optional[int]
+) -> tuple[Optional[int], Optional[int]]:
     """Validate pagination parameters."""
     if limit is not None:
         if not isinstance(limit, int):
@@ -140,15 +142,19 @@ def validate_limit_offset(limit: Optional[int], offset: Optional[int]) -> tuple[
 def validate_contact_type(contact_type: str) -> str:
     """Validate and normalize contact type."""
     if not isinstance(contact_type, str):
-        raise ClioValidationError(f"Contact type must be a string, got {type(contact_type).__name__}")
+        raise ClioValidationError(
+            f"Contact type must be a string, got {type(contact_type).__name__}"
+        )
 
     contact_type = contact_type.strip().lower()
-    if contact_type in ['person', 'individual']:
-        return 'Person'
-    elif contact_type in ['company', 'organization', 'business']:
-        return 'Company'
+    if contact_type in ["person", "individual"]:
+        return "Person"
+    elif contact_type in ["company", "organization", "business"]:
+        return "Company"
     else:
-        raise ClioValidationError(f"Invalid contact type: {contact_type}. Must be 'Person' or 'Company'")
+        raise ClioValidationError(
+            f"Invalid contact type: {contact_type}. Must be 'Person' or 'Company'"
+        )
 
 
 def validate_matter_status(status: str) -> str:
@@ -157,26 +163,32 @@ def validate_matter_status(status: str) -> str:
         raise ClioValidationError(f"Matter status must be a string, got {type(status).__name__}")
 
     status = status.strip().lower()
-    valid_statuses = ['open', 'closed', 'pending']
+    valid_statuses = ["open", "closed", "pending"]
 
     if status in valid_statuses:
         return status.title()
     else:
-        raise ClioValidationError(f"Invalid matter status: {status}. Must be one of: {', '.join(valid_statuses)}")
+        raise ClioValidationError(
+            f"Invalid matter status: {status}. Must be one of: {', '.join(valid_statuses)}"
+        )
 
 
 def validate_activity_type(activity_type: str) -> str:
     """Validate and normalize activity type."""
     if not isinstance(activity_type, str):
-        raise ClioValidationError(f"Activity type must be a string, got {type(activity_type).__name__}")
+        raise ClioValidationError(
+            f"Activity type must be a string, got {type(activity_type).__name__}"
+        )
 
     activity_type = activity_type.strip().lower()
-    if activity_type in ['time', 'timeentry', 'time_entry']:
-        return 'TimeEntry'
-    elif activity_type in ['expense', 'expenseentry', 'expense_entry']:
-        return 'ExpenseEntry'
+    if activity_type in ["time", "timeentry", "time_entry"]:
+        return "TimeEntry"
+    elif activity_type in ["expense", "expenseentry", "expense_entry"]:
+        return "ExpenseEntry"
     else:
-        raise ClioValidationError(f"Invalid activity type: {activity_type}. Must be 'TimeEntry' or 'ExpenseEntry'")
+        raise ClioValidationError(
+            f"Invalid activity type: {activity_type}. Must be 'TimeEntry' or 'ExpenseEntry'"
+        )
 
 
 def validate_hours(hours: float) -> float:
@@ -214,7 +226,7 @@ def validate_participant_role(role: str) -> str:
         raise ClioValidationError(f"Role must be a string, got {type(role).__name__}")
 
     role = role.strip().lower()
-    valid_roles = ['client', 'responsible_attorney', 'originating_attorney']
+    valid_roles = ["client", "responsible_attorney", "originating_attorney"]
 
     if role not in valid_roles:
         raise ClioValidationError(f"Invalid role: {role}. Must be one of: {', '.join(valid_roles)}")

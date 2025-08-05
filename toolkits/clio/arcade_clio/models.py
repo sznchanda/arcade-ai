@@ -15,7 +15,7 @@ class ClioBaseModel(BaseModel):
         json_encoders={
             datetime: lambda v: v.isoformat() if v else None,
             Decimal: str,
-        }
+        },
     )
 
     id: Optional[int] = None
@@ -194,6 +194,14 @@ class Bill(ClioBaseModel):
     footer: Optional[str] = None
 
 
+class DocumentCategory(BaseModel):
+    """Document category model."""
+
+    id: Optional[int] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
 class DocumentVersion(BaseModel):
     """Document version model."""
 
@@ -203,6 +211,7 @@ class DocumentVersion(BaseModel):
     size: Optional[int] = None
     content_type: Optional[str] = None
     created_at: Optional[datetime] = None
+    download_url: Optional[str] = None
 
 
 class Document(ClioBaseModel):
@@ -211,9 +220,16 @@ class Document(ClioBaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
 
+    # File properties
+    filename: Optional[str] = None
+    size: Optional[int] = None
+    content_type: Optional[str] = None
+
     # Relationships
     matter: Optional[Matter] = None
+    contact: Optional[Contact] = None
     parent_document: Optional["Document"] = None
+    document_category: Optional[DocumentCategory] = None
 
     # Version information
     current_version: Optional[DocumentVersion] = None
@@ -221,9 +237,14 @@ class Document(ClioBaseModel):
 
     # Status
     is_folder: Optional[bool] = None
+    is_version: Optional[bool] = None
 
     # Permissions
     public: Optional[bool] = None
+
+    # Metadata
+    tags: list[str] = Field(default_factory=list)
+    custom_field_values: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class PaymentMethod(BaseModel):
@@ -268,6 +289,7 @@ class PaymentLink(ClioBaseModel):
 
 
 # Request/Response models
+
 
 class ContactCreateRequest(BaseModel):
     """Request model for creating a contact."""
@@ -350,3 +372,28 @@ class ActivityUpdateRequest(BaseModel):
     description: Optional[str] = None
     activity_type_id: Optional[int] = None
     price: Optional[Decimal] = None
+
+
+class DocumentCreateRequest(BaseModel):
+    """Request model for creating a document."""
+
+    name: str = Field(..., description="Document name")
+    matter_id: Optional[int] = Field(None, description="Associated matter ID")
+    contact_id: Optional[int] = Field(None, description="Associated contact ID")
+    parent_document_id: Optional[int] = Field(None, description="Parent document ID (for folders)")
+    document_category_id: Optional[int] = Field(None, description="Document category ID")
+    description: Optional[str] = Field(None, description="Document description")
+    is_folder: bool = Field(False, description="Whether this is a folder")
+    public: bool = Field(False, description="Whether document is public")
+    tags: list[str] = Field(default_factory=list, description="Document tags")
+
+
+class DocumentUpdateRequest(BaseModel):
+    """Request model for updating a document."""
+
+    name: Optional[str] = Field(None, description="Document name")
+    description: Optional[str] = Field(None, description="Document description")
+    document_category_id: Optional[int] = Field(None, description="Document category ID")
+    parent_document_id: Optional[int] = Field(None, description="Parent document ID")
+    public: Optional[bool] = Field(None, description="Whether document is public")
+    tags: Optional[list[str]] = Field(None, description="Document tags")

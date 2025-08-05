@@ -30,32 +30,19 @@ from ..validation import (
 async def list_matters(
     context: ToolContext,
     status: Annotated[
-        Optional[str],
-        "Filter by matter status: 'Open', 'Closed', 'Pending' (optional)"
+        Optional[str], "Filter by matter status: 'Open', 'Closed', 'Pending' (optional)"
     ] = None,
-    client_id: Annotated[
-        Optional[int],
-        "Filter by client contact ID (optional)"
-    ] = None,
+    client_id: Annotated[Optional[int], "Filter by client contact ID (optional)"] = None,
     responsible_attorney_id: Annotated[
-        Optional[int],
-        "Filter by responsible attorney contact ID (optional)"
+        Optional[int], "Filter by responsible attorney contact ID (optional)"
     ] = None,
-    practice_area_id: Annotated[
-        Optional[int],
-        "Filter by practice area ID (optional)"
-    ] = None,
+    practice_area_id: Annotated[Optional[int], "Filter by practice area ID (optional)"] = None,
     limit: Annotated[
-        Optional[int],
-        "Maximum number of matters to return (1-200, default: 50)"
+        Optional[int], "Maximum number of matters to return (1-200, default: 50)"
     ] = 50,
-    offset: Annotated[
-        Optional[int],
-        "Number of matters to skip for pagination (default: 0)"
-    ] = 0,
+    offset: Annotated[Optional[int], "Number of matters to skip for pagination (default: 0)"] = 0,
     include_extra_data: Annotated[
-        bool,
-        "Include all available matter data (default: False for summary only)"
+        bool, "Include all available matter data (default: False for summary only)"
     ] = False,
 ) -> Annotated[str, "JSON string containing the list of matters"]:
     """
@@ -76,7 +63,9 @@ async def list_matters(
             if client_id is not None:
                 client_id = validate_id(client_id, "Client ID")
             if responsible_attorney_id is not None:
-                responsible_attorney_id = validate_id(responsible_attorney_id, "Responsible attorney ID")
+                responsible_attorney_id = validate_id(
+                    responsible_attorney_id, "Responsible attorney ID"
+                )
             if practice_area_id is not None:
                 practice_area_id = validate_id(practice_area_id, "Practice area ID")
             limit, offset = validate_limit_offset(limit, offset)
@@ -108,8 +97,7 @@ async def get_matter(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter to retrieve"],
     include_extra_data: Annotated[
-        bool,
-        "Include all available matter data (default: False for summary only)"
+        bool, "Include all available matter data (default: False for summary only)"
     ] = False,
 ) -> Annotated[str, "JSON string containing the matter details"]:
     """
@@ -142,24 +130,15 @@ async def create_matter(
     description: Annotated[str, "Description or name of the matter"],
     client_id: Annotated[Optional[int], "Client contact ID (optional)"] = None,
     responsible_attorney_id: Annotated[
-        Optional[int],
-        "Responsible attorney contact ID (optional)"
+        Optional[int], "Responsible attorney contact ID (optional)"
     ] = None,
-    practice_area_id: Annotated[
-        Optional[int],
-        "Practice area ID (optional)"
-    ] = None,
+    practice_area_id: Annotated[Optional[int], "Practice area ID (optional)"] = None,
     open_date: Annotated[
-        Optional[str],
-        "Matter open date in YYYY-MM-DD format (optional, defaults to today)"
+        Optional[str], "Matter open date in YYYY-MM-DD format (optional, defaults to today)"
     ] = None,
-    billable: Annotated[
-        bool,
-        "Whether the matter is billable (default: True)"
-    ] = True,
+    billable: Annotated[bool, "Whether the matter is billable (default: True)"] = True,
     billing_method: Annotated[
-        Optional[str],
-        "Billing method (e.g., 'hourly', 'flat_fee', optional)"
+        Optional[str], "Billing method (e.g., 'hourly', 'flat_fee', optional)"
     ] = None,
 ) -> Annotated[str, "JSON string containing the created matter details"]:
     """
@@ -187,7 +166,9 @@ async def create_matter(
             if client_id is not None:
                 client_id = validate_id(client_id, "Client ID")
             if responsible_attorney_id is not None:
-                responsible_attorney_id = validate_id(responsible_attorney_id, "Responsible attorney ID")
+                responsible_attorney_id = validate_id(
+                    responsible_attorney_id, "Responsible attorney ID"
+                )
             if practice_area_id is not None:
                 practice_area_id = validate_id(practice_area_id, "Practice area ID")
             billing_method = validate_optional_string(billing_method, "Billing method")
@@ -228,19 +209,12 @@ async def update_matter(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter to update"],
     description: Annotated[Optional[str], "Matter description"] = None,
-    status: Annotated[
-        Optional[str],
-        "Matter status: 'Open', 'Closed', 'Pending'"
-    ] = None,
+    status: Annotated[Optional[str], "Matter status: 'Open', 'Closed', 'Pending'"] = None,
     client_id: Annotated[Optional[int], "Client contact ID"] = None,
-    responsible_attorney_id: Annotated[
-        Optional[int],
-        "Responsible attorney contact ID"
-    ] = None,
+    responsible_attorney_id: Annotated[Optional[int], "Responsible attorney contact ID"] = None,
     practice_area_id: Annotated[Optional[int], "Practice area ID"] = None,
     close_date: Annotated[
-        Optional[str],
-        "Matter close date in YYYY-MM-DD format (required if status is 'Closed')"
+        Optional[str], "Matter close date in YYYY-MM-DD format (required if status is 'Closed')"
     ] = None,
     billable: Annotated[Optional[bool], "Whether the matter is billable"] = None,
     billing_method: Annotated[Optional[str], "Billing method"] = None,
@@ -319,8 +293,7 @@ async def close_matter(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter to close"],
     close_date: Annotated[
-        Optional[str],
-        "Close date in YYYY-MM-DD format (optional, defaults to today)"
+        Optional[str], "Close date in YYYY-MM-DD format (optional, defaults to today)"
     ] = None,
 ) -> Annotated[str, "JSON string containing the closed matter details"]:
     """
@@ -369,20 +342,16 @@ async def get_matter_activities(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter"],
     activity_type: Annotated[
-        Optional[str],
-        "Filter by activity type: 'TimeEntry' or 'ExpenseEntry' (optional)"
+        Optional[str], "Filter by activity type: 'TimeEntry' or 'ExpenseEntry' (optional)"
     ] = None,
     limit: Annotated[
-        Optional[int],
-        "Maximum number of activities to return (1-200, default: 50)"
+        Optional[int], "Maximum number of activities to return (1-200, default: 50)"
     ] = 50,
     offset: Annotated[
-        Optional[int],
-        "Number of activities to skip for pagination (default: 0)"
+        Optional[int], "Number of activities to skip for pagination (default: 0)"
     ] = 0,
     include_extra_data: Annotated[
-        bool,
-        "Include all available activity data (default: False for summary only)"
+        bool, "Include all available activity data (default: False for summary only)"
     ] = False,
 ) -> Annotated[str, "JSON string containing the matter's activities"]:
     """
@@ -422,8 +391,7 @@ async def add_matter_participant(
     matter_id: Annotated[int, "The ID of the matter"],
     contact_id: Annotated[int, "The ID of the contact to add"],
     role: Annotated[
-        str,
-        "Role of the participant: 'client', 'responsible_attorney', 'originating_attorney'"
+        str, "Role of the participant: 'client', 'responsible_attorney', 'originating_attorney'"
     ],
 ) -> Annotated[str, "JSON string containing the updated matter details"]:
     """
@@ -471,8 +439,7 @@ async def remove_matter_participant(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter"],
     role: Annotated[
-        str,
-        "Role to remove: 'client', 'responsible_attorney', 'originating_attorney'"
+        str, "Role to remove: 'client', 'responsible_attorney', 'originating_attorney'"
     ],
 ) -> Annotated[str, "JSON string containing the updated matter details"]:
     """
@@ -512,3 +479,164 @@ async def remove_matter_participant(
             raise
         except Exception as e:
             raise ClioError(f"Failed to remove participant from matter {matter_id}: {e!s}")
+
+
+@tool(requires_auth=Clio())
+async def search_matters(
+    context: ToolContext,
+    query: Annotated[Optional[str], "Search query to filter matters by description"] = None,
+    client_id: Annotated[Optional[str], "Filter matters by client contact ID"] = None,
+    status: Annotated[Optional[str], "Filter matters by status (Open, Closed, etc.)"] = None,
+    practice_area: Annotated[Optional[str], "Filter matters by practice area"] = None,
+    responsible_attorney_id: Annotated[Optional[str], "Filter by responsible attorney ID"] = None,
+    originating_attorney_id: Annotated[Optional[str], "Filter by originating attorney ID"] = None,
+    billing_method: Annotated[Optional[str], "Filter by billing method"] = None,
+    open_date_from: Annotated[Optional[str], "Filter by open date from (YYYY-MM-DD)"] = None,
+    open_date_to: Annotated[Optional[str], "Filter by open date to (YYYY-MM-DD)"] = None,
+    limit: Annotated[int, "Maximum number of matters to return (default: 50)"] = 50,
+    offset: Annotated[int, "Number of matters to skip for pagination (default: 0)"] = 0,
+    fields: Annotated[Optional[str], "Comma-separated list of fields to include"] = None,
+) -> Annotated[str, "JSON response with search results and pagination info"]:
+    """Advanced matter search with multiple filters.
+
+    Provides comprehensive search capabilities for matters with support for filtering
+    by client, status, practice area, attorneys, billing method, and date ranges.
+    Supports text search across matter descriptions and returns paginated results.
+    """
+    validate_positive_number(limit, "limit")
+    validate_positive_number(offset, "offset")
+
+    if client_id:
+        validate_id(client_id, "client_id")
+    if responsible_attorney_id:
+        validate_id(responsible_attorney_id, "responsible_attorney_id")
+    if originating_attorney_id:
+        validate_id(originating_attorney_id, "originating_attorney_id")
+    if query:
+        validate_optional_string(query, "query")
+    if status:
+        validate_optional_string(status, "status")
+    if practice_area:
+        validate_optional_string(practice_area, "practice_area")
+    if billing_method:
+        validate_optional_string(billing_method, "billing_method")
+    if open_date_from:
+        validate_date_string(open_date_from, "open_date_from")
+    if open_date_to:
+        validate_date_string(open_date_to, "open_date_to")
+    if fields:
+        validate_optional_string(fields, "fields")
+
+    try:
+        async with ClioClient(context) as client:
+            # Build comprehensive search parameters
+            params = build_search_params({
+                "limit": limit,
+                "offset": offset,
+                "query": query,
+                "client_id": client_id,
+                "status": status,
+                "practice_area": practice_area,
+                "responsible_attorney_id": responsible_attorney_id,
+                "originating_attorney_id": originating_attorney_id,
+                "billing_method": billing_method,
+                "open_date_from": open_date_from,
+                "open_date_to": open_date_to,
+                "fields": fields,
+            })
+
+            response = await client.get("/matters", params=params)
+            matters = extract_list_data(response, "matters", Matter)
+
+            return format_json_response({
+                "success": True,
+                "matters": matters,
+                "pagination": {
+                    "limit": limit,
+                    "offset": offset,
+                    "total": response.get("meta", {}).get("total_count"),
+                },
+                "search_query": query,
+                "filters_applied": {
+                    key: value
+                    for key, value in {
+                        "client_id": client_id,
+                        "status": status,
+                        "practice_area": practice_area,
+                        "responsible_attorney_id": responsible_attorney_id,
+                        "originating_attorney_id": originating_attorney_id,
+                        "billing_method": billing_method,
+                        "open_date_from": open_date_from,
+                        "open_date_to": open_date_to,
+                    }.items()
+                    if value is not None
+                },
+            })
+
+    except ClioError as e:
+        raise ClioValidationError(f"Failed to search matters: {e}")
+
+
+@tool(requires_auth=Clio())
+async def delete_matter(
+    context: ToolContext,
+    matter_id: Annotated[str, "The ID of the matter to delete"],
+) -> Annotated[str, "JSON response confirming matter deletion"]:
+    """Delete a matter.
+
+    Permanently removes a matter from Clio. This action cannot be undone.
+    If the matter has associated time entries, expenses, documents, or bills,
+    deletion may be restricted to maintain data integrity. Ensure proper
+    authorization and validation before deletion.
+
+    Note: Matters with existing billing records, documents, or activities
+    may require special handling or cannot be deleted. Consider closing
+    the matter instead of deletion for matters with historical data.
+    """
+    validate_id(matter_id, "matter_id")
+
+    try:
+        async with ClioClient(context) as client:
+            # First get matter info for confirmation message
+            matter_response = await client.get(f"/matters/{matter_id}")
+            matter = extract_model_data(matter_response, "matter", Matter)
+            matter_desc = matter.get("description", f"Matter {matter_id}")
+
+            # Check if matter has associated activities (time/expenses)
+            activities_response = await client.get(
+                "/activities", params={"matter_id": matter_id, "limit": 1}
+            )
+            if activities_response.get("activities") and len(activities_response["activities"]) > 0:
+                raise ClioValidationError(
+                    f"Cannot delete matter '{matter_desc}' - matter has associated time entries or expenses. "
+                    f"Remove all activities first or use close_matter instead."
+                )
+
+            # Check if matter has associated documents
+            documents_response = await client.get(
+                "/documents", params={"matter_id": matter_id, "limit": 1}
+            )
+            if documents_response.get("documents") and len(documents_response["documents"]) > 0:
+                raise ClioValidationError(
+                    f"Cannot delete matter '{matter_desc}' - matter has associated documents. "
+                    f"Remove all documents first or use close_matter instead."
+                )
+
+            # Check if matter has associated bills
+            bills_response = await client.get("/bills", params={"matter_id": matter_id, "limit": 1})
+            if bills_response.get("bills") and len(bills_response["bills"]) > 0:
+                raise ClioValidationError(
+                    f"Cannot delete matter '{matter_desc}' - matter has associated bills. "
+                    f"Billing records must be preserved for audit purposes. Use close_matter instead."
+                )
+
+            # Delete the matter
+            await client.delete(f"/matters/{matter_id}")
+
+            return format_json_response({
+                "success": True,
+                "message": f"Matter '{matter_desc}' (ID: {matter_id}) deleted successfully",
+            })
+
+    except ClioError as e:
+        raise ClioValidationError(f"Failed to delete matter {matter_id}: {e}")

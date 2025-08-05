@@ -173,12 +173,12 @@ from arcade_tdk import ToolCatalog
 def eval_suite() -> EvalSuite:
     catalog = ToolCatalog()
     catalog.add_module(arcade_toolkit)
-    
+
     suite = EvalSuite(
         name="Suite Name",
         catalog=catalog,
     )
-    
+
     suite.add_case(
         name="Test case",
         user_message="User request",

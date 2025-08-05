@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-The Clio toolkit provides LLM tools for integrating with Clio legal practice management software. It implements 21 tools across contact management, matter/case management, and billing/time tracking using the Clio API v4.
+The Clio toolkit provides LLM tools for integrating with Clio legal practice management software. It now implements **32 tools** across contact management, matter/case management, document management, and billing/activity tracking using the Clio API v4. 
+
+**Recent Updates**: Enhanced with full feature parity to Klavis MCP documentation, adding 11 new tools including complete document management, unified activity operations, advanced search capabilities, and delete operations.
 
 ## Development Commands
 
@@ -63,14 +65,16 @@ make clean-build
 - All exceptions inherit from `ClioError` base class
 
 **Tool Categories (`arcade_clio/tools/`)**
-- **contacts.py**: Contact management (6 tools) - search, create, update, get relationships
-- **matters.py**: Matter/case management (8 tools) - create, update, close, participants
-- **billing.py**: Time tracking and billing (7 tools) - time entries, expenses, bills
+- **contacts.py**: Contact management (7 tools) - search, create, update, delete, get relationships, activities
+- **matters.py**: Matter/case management (10 tools) - create, update, close, delete, search, participants, activities
+- **documents.py**: Document management (5 tools) - list, get, create, update, delete documents
+- **billing.py**: Time tracking and billing (10 tools) - time entries, expenses, bills, unified activities
 
 **Data Models (`arcade_clio/models.py`)**
-- Pydantic v2 models for API entities (Contact, Matter, Activity, Bill, etc.)
+- Pydantic v2 models for API entities (Contact, Matter, Activity, Bill, Document, etc.)
 - Handles legal-specific requirements like `Decimal` precision for monetary values
 - Request/response models for create/update operations
+- Document models support version control, categories, and metadata
 
 **Validation (`arcade_clio/validation.py`)**
 - Legal industry-specific validation (e.g., 6-minute billing increments)
@@ -145,3 +149,31 @@ async def tool_name(
 - Designed for Clio API v4 - older versions not supported
 - Retry logic handles API rate limits and transient failures
 - Error handling maps HTTP status codes to appropriate exceptions
+
+## New Tools Added (Klavis MCP Parity)
+
+### Document Management Tools (5 new tools)
+- `list_documents`: List documents with filtering by matter, contact, folder status
+- `get_document`: Retrieve specific document details and metadata
+- `create_document`: Create new documents or folders with categorization
+- `update_document`: Update document metadata, descriptions, and organization
+- `delete_document`: Remove documents with safety checks for associations
+
+### Unified Activity Management (3 new tools)  
+- `list_activities`: Unified listing of time entries and expenses with comprehensive filtering
+- `get_activity`: Retrieve detailed activity information (works for both time and expenses)
+- `delete_activity`: Remove activities with billing validation and safety checks
+
+### Advanced Search (1 new tool)
+- `search_matters`: Advanced matter search with multiple filter criteria including client, status, practice area, attorneys, billing method, and date ranges
+
+### Delete Operations (2 new tools)
+- `delete_contact`: Remove contacts with relationship validation
+- `delete_matter`: Remove matters with comprehensive association checks
+
+### Key Features of New Tools
+- **Safety First**: All delete operations include comprehensive validation and relationship checks
+- **Unified Interface**: Activity tools provide single interface for both time entries and expenses
+- **Advanced Filtering**: Enhanced search capabilities with multiple filter combinations
+- **Document Organization**: Full document lifecycle management with folders and categories
+- **Audit Trail**: Detailed confirmation messages and error handling for all operations

@@ -31,20 +31,14 @@ async def search_contacts(
     context: ToolContext,
     query: Annotated[str, "Search query for contacts (name, email, phone, company)"],
     contact_type: Annotated[
-        Optional[str],
-        "Filter by contact type: 'Person' or 'Company' (optional)"
+        Optional[str], "Filter by contact type: 'Person' or 'Company' (optional)"
     ] = None,
     limit: Annotated[
-        Optional[int],
-        "Maximum number of contacts to return (1-200, default: 50)"
+        Optional[int], "Maximum number of contacts to return (1-200, default: 50)"
     ] = 50,
-    offset: Annotated[
-        Optional[int],
-        "Number of contacts to skip for pagination (default: 0)"
-    ] = 0,
+    offset: Annotated[Optional[int], "Number of contacts to skip for pagination (default: 0)"] = 0,
     include_extra_data: Annotated[
-        bool,
-        "Include all available contact data (default: False for summary only)"
+        bool, "Include all available contact data (default: False for summary only)"
     ] = False,
 ) -> Annotated[str, "JSON string containing matching contacts with their details"]:
     """
@@ -84,8 +78,7 @@ async def get_contact(
     context: ToolContext,
     contact_id: Annotated[int, "The ID of the contact to retrieve"],
     include_extra_data: Annotated[
-        bool,
-        "Include all available contact data (default: False for summary only)"
+        bool, "Include all available contact data (default: False for summary only)"
     ] = False,
 ) -> Annotated[str, "JSON string containing the contact details"]:
     """
@@ -121,7 +114,9 @@ async def create_contact(
     name: Annotated[Optional[str], "Full name for companies or display name"] = None,
     first_name: Annotated[Optional[str], "First name (for Person type)"] = None,
     last_name: Annotated[Optional[str], "Last name (for Person type)"] = None,
-    company: Annotated[Optional[str], "Company name (for Company type or person's employer)"] = None,
+    company: Annotated[
+        Optional[str], "Company name (for Company type or person's employer)"
+    ] = None,
     email: Annotated[Optional[str], "Primary email address"] = None,
     phone: Annotated[Optional[str], "Primary phone number"] = None,
     title: Annotated[Optional[str], "Job title or position"] = None,
@@ -174,7 +169,9 @@ async def create_contact(
             # Validate required fields
             if contact_type == "Person":
                 if not first_name and not last_name:
-                    raise ClioValidationError("Person contacts require at least first_name or last_name")
+                    raise ClioValidationError(
+                        "Person contacts require at least first_name or last_name"
+                    )
             elif contact_type == "Company" and not name and not company:
                 raise ClioValidationError("Company contacts require either name or company field")
 
@@ -269,20 +266,16 @@ async def list_contact_activities(
     context: ToolContext,
     contact_id: Annotated[int, "The ID of the contact"],
     limit: Annotated[
-        Optional[int],
-        "Maximum number of activities to return (1-200, default: 50)"
+        Optional[int], "Maximum number of activities to return (1-200, default: 50)"
     ] = 50,
     offset: Annotated[
-        Optional[int],
-        "Number of activities to skip for pagination (default: 0)"
+        Optional[int], "Number of activities to skip for pagination (default: 0)"
     ] = 0,
     activity_type: Annotated[
-        Optional[str],
-        "Filter by activity type: 'TimeEntry' or 'ExpenseEntry'"
+        Optional[str], "Filter by activity type: 'TimeEntry' or 'ExpenseEntry'"
     ] = None,
     include_extra_data: Annotated[
-        bool,
-        "Include all available activity data (default: False for summary only)"
+        bool, "Include all available activity data (default: False for summary only)"
     ] = False,
 ) -> Annotated[str, "JSON string containing the contact's activities"]:
     """
@@ -300,6 +293,7 @@ async def list_contact_activities(
             limit, offset = validate_limit_offset(limit, offset)
             if activity_type:
                 from ..validation import validate_activity_type
+
                 activity_type = validate_activity_type(activity_type)
 
             # Build search parameters
@@ -327,12 +321,10 @@ async def get_contact_relationships(
     context: ToolContext,
     contact_id: Annotated[int, "The ID of the contact"],
     limit: Annotated[
-        Optional[int],
-        "Maximum number of relationships to return (1-200, default: 50)"
+        Optional[int], "Maximum number of relationships to return (1-200, default: 50)"
     ] = 50,
     include_extra_data: Annotated[
-        bool,
-        "Include all available relationship data (default: False for summary only)"
+        bool, "Include all available relationship data (default: False for summary only)"
     ] = False,
 ) -> Annotated[str, "JSON string containing the contact's matter relationships"]:
     """
@@ -389,3 +381,49 @@ async def get_contact_relationships(
             raise
         except Exception as e:
             raise ClioError(f"Failed to retrieve relationships for contact {contact_id}: {e!s}")
+
+
+@tool(requires_auth=Clio())
+async def delete_contact(
+    context: ToolContext,
+    contact_id: Annotated[str, "The ID of the contact to delete"],
+) -> Annotated[str, "JSON response confirming contact deletion"]:
+    """Delete a contact.
+
+    Permanently removes a contact from Clio. This action cannot be undone.
+    If the contact is associated with matters, documents, or activities,
+    deletion may be restricted. Ensure proper authorization and validation
+    before deletion.
+
+    Note: Contacts with existing matter relationships or billing records
+    may require special handling or cannot be deleted to maintain data integrity.
+    """
+    validate_id(contact_id, "contact_id")
+
+    try:
+        async with ClioClient(context) as client:
+            # First get contact info for confirmation message
+            contact_response = await client.get(f"/contacts/{contact_id}")
+            contact = extract_model_data(contact_response, "contact", Contact)
+            contact_name = contact.get("name", f"Contact {contact_id}")
+
+            # Check if contact has active matter relationships
+            matters_response = await client.get(
+                "/matters", params={"client_id": contact_id, "limit": 1}
+            )
+            if matters_response.get("matters") and len(matters_response["matters"]) > 0:
+                raise ClioValidationError(
+                    f"Cannot delete contact '{contact_name}' - contact has active matter relationships. "
+                    f"Remove from all matters first or contact administrator."
+                )
+
+            # Delete the contact
+            await client.delete(f"/contacts/{contact_id}")
+
+            return format_json_response({
+                "success": True,
+                "message": f"Contact '{contact_name}' (ID: {contact_id}) deleted successfully",
+            })
+
+    except ClioError as e:
+        raise ClioValidationError(f"Failed to delete contact {contact_id}: {e}")

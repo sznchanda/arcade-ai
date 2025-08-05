@@ -109,16 +109,24 @@ class ClioClient:
 
             # Handle rate limiting with retry
             if response.status_code == 429 and retry_count < self.MAX_RETRIES:
-                await asyncio.sleep(self.RETRY_DELAY * (2 ** retry_count))
+                await asyncio.sleep(self.RETRY_DELAY * (2**retry_count))
                 return await self._make_request(
-                    method, endpoint, params=params, json_data=json_data, retry_count=retry_count + 1
+                    method,
+                    endpoint,
+                    params=params,
+                    json_data=json_data,
+                    retry_count=retry_count + 1,
                 )
 
             # Handle server errors with retry
             if response.status_code >= 500 and retry_count < self.MAX_RETRIES:
-                await asyncio.sleep(self.RETRY_DELAY * (2 ** retry_count))
+                await asyncio.sleep(self.RETRY_DELAY * (2**retry_count))
                 return await self._make_request(
-                    method, endpoint, params=params, json_data=json_data, retry_count=retry_count + 1
+                    method,
+                    endpoint,
+                    params=params,
+                    json_data=json_data,
+                    retry_count=retry_count + 1,
                 )
 
             # Handle specific errors
@@ -126,17 +134,25 @@ class ClioClient:
 
         except httpx.TimeoutException as e:
             if retry_count < self.MAX_RETRIES:
-                await asyncio.sleep(self.RETRY_DELAY * (2 ** retry_count))
+                await asyncio.sleep(self.RETRY_DELAY * (2**retry_count))
                 return await self._make_request(
-                    method, endpoint, params=params, json_data=json_data, retry_count=retry_count + 1
+                    method,
+                    endpoint,
+                    params=params,
+                    json_data=json_data,
+                    retry_count=retry_count + 1,
                 )
             raise ClioTimeoutError(f"Request timeout: {e!s}")
 
         except httpx.NetworkError as e:
             if retry_count < self.MAX_RETRIES:
-                await asyncio.sleep(self.RETRY_DELAY * (2 ** retry_count))
+                await asyncio.sleep(self.RETRY_DELAY * (2**retry_count))
                 return await self._make_request(
-                    method, endpoint, params=params, json_data=json_data, retry_count=retry_count + 1
+                    method,
+                    endpoint,
+                    params=params,
+                    json_data=json_data,
+                    retry_count=retry_count + 1,
                 )
             raise ClioError(f"Network error: {e!s}")
 
@@ -144,10 +160,7 @@ class ClioClient:
         raise ClioError("Unexpected response")
 
     async def get(
-        self,
-        endpoint: str,
-        *,
-        params: Optional[dict[str, Any]] = None
+        self, endpoint: str, *, params: Optional[dict[str, Any]] = None
     ) -> dict[str, Any]:
         """Make a GET request."""
         response = await self._make_request("GET", endpoint, params=params)
@@ -176,10 +189,7 @@ class ClioClient:
         return response.json()
 
     async def delete(
-        self,
-        endpoint: str,
-        *,
-        params: Optional[dict[str, Any]] = None
+        self, endpoint: str, *, params: Optional[dict[str, Any]] = None
     ) -> dict[str, Any]:
         """Make a DELETE request."""
         response = await self._make_request("DELETE", endpoint, params=params)
@@ -192,11 +202,7 @@ class ClioClient:
     # Convenience methods for common endpoints
 
     async def get_contacts(
-        self,
-        *,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        **filters: Any
+        self, *, limit: Optional[int] = None, offset: Optional[int] = None, **filters: Any
     ) -> dict[str, Any]:
         """Get contacts with optional filtering."""
         params = {}
@@ -213,11 +219,7 @@ class ClioClient:
         return await self.get(f"contacts/{contact_id}")
 
     async def get_matters(
-        self,
-        *,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        **filters: Any
+        self, *, limit: Optional[int] = None, offset: Optional[int] = None, **filters: Any
     ) -> dict[str, Any]:
         """Get matters with optional filtering."""
         params = {}
@@ -234,11 +236,7 @@ class ClioClient:
         return await self.get(f"matters/{matter_id}")
 
     async def get_activities(
-        self,
-        *,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        **filters: Any
+        self, *, limit: Optional[int] = None, offset: Optional[int] = None, **filters: Any
     ) -> dict[str, Any]:
         """Get activities with optional filtering."""
         params = {}
@@ -251,11 +249,7 @@ class ClioClient:
         return await self.get("activities", params=params)
 
     async def get_bills(
-        self,
-        *,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        **filters: Any
+        self, *, limit: Optional[int] = None, offset: Optional[int] = None, **filters: Any
     ) -> dict[str, Any]:
         """Get bills with optional filtering."""
         params = {}
@@ -268,11 +262,7 @@ class ClioClient:
         return await self.get("bills", params=params)
 
     async def get_documents(
-        self,
-        *,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        **filters: Any
+        self, *, limit: Optional[int] = None, offset: Optional[int] = None, **filters: Any
     ) -> dict[str, Any]:
         """Get documents with optional filtering."""
         params = {}

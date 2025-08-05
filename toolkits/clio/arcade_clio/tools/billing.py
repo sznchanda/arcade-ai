@@ -36,12 +36,10 @@ async def create_time_entry(
     hours: Annotated[float, "Number of hours worked (e.g., 2.5 for 2 hours 30 minutes)"],
     description: Annotated[str, "Description of work performed"],
     activity_type_id: Annotated[
-        Optional[int],
-        "Activity type ID for billing rates (optional)"
+        Optional[int], "Activity type ID for billing rates (optional)"
     ] = None,
     rate: Annotated[
-        Optional[float],
-        "Hourly rate override (optional, uses default rate if not specified)"
+        Optional[float], "Hourly rate override (optional, uses default rate if not specified)"
     ] = None,
 ) -> Annotated[str, "JSON string containing the created time entry details"]:
     """
@@ -187,29 +185,18 @@ async def get_time_entries(
     context: ToolContext,
     matter_id: Annotated[Optional[int], "Filter by matter ID (optional)"] = None,
     user_id: Annotated[Optional[int], "Filter by user/attorney ID (optional)"] = None,
-    date_from: Annotated[
-        Optional[str],
-        "Start date filter in YYYY-MM-DD format (optional)"
-    ] = None,
-    date_to: Annotated[
-        Optional[str],
-        "End date filter in YYYY-MM-DD format (optional)"
-    ] = None,
+    date_from: Annotated[Optional[str], "Start date filter in YYYY-MM-DD format (optional)"] = None,
+    date_to: Annotated[Optional[str], "End date filter in YYYY-MM-DD format (optional)"] = None,
     billed: Annotated[
         Optional[bool],
-        "Filter by billing status: True for billed, False for unbilled, None for all"
+        "Filter by billing status: True for billed, False for unbilled, None for all",
     ] = None,
     limit: Annotated[
-        Optional[int],
-        "Maximum number of entries to return (1-200, default: 50)"
+        Optional[int], "Maximum number of entries to return (1-200, default: 50)"
     ] = 50,
-    offset: Annotated[
-        Optional[int],
-        "Number of entries to skip for pagination (default: 0)"
-    ] = 0,
+    offset: Annotated[Optional[int], "Number of entries to skip for pagination (default: 0)"] = 0,
     include_extra_data: Annotated[
-        bool,
-        "Include all available time entry data (default: False for summary only)"
+        bool, "Include all available time entry data (default: False for summary only)"
     ] = False,
 ) -> Annotated[str, "JSON string containing time entries"]:
     """
@@ -338,29 +325,18 @@ async def get_expenses(
     context: ToolContext,
     matter_id: Annotated[Optional[int], "Filter by matter ID (optional)"] = None,
     user_id: Annotated[Optional[int], "Filter by user ID (optional)"] = None,
-    date_from: Annotated[
-        Optional[str],
-        "Start date filter in YYYY-MM-DD format (optional)"
-    ] = None,
-    date_to: Annotated[
-        Optional[str],
-        "End date filter in YYYY-MM-DD format (optional)"
-    ] = None,
+    date_from: Annotated[Optional[str], "Start date filter in YYYY-MM-DD format (optional)"] = None,
+    date_to: Annotated[Optional[str], "End date filter in YYYY-MM-DD format (optional)"] = None,
     billed: Annotated[
         Optional[bool],
-        "Filter by billing status: True for billed, False for unbilled, None for all"
+        "Filter by billing status: True for billed, False for unbilled, None for all",
     ] = None,
     limit: Annotated[
-        Optional[int],
-        "Maximum number of expenses to return (1-200, default: 50)"
+        Optional[int], "Maximum number of expenses to return (1-200, default: 50)"
     ] = 50,
-    offset: Annotated[
-        Optional[int],
-        "Number of expenses to skip for pagination (default: 0)"
-    ] = 0,
+    offset: Annotated[Optional[int], "Number of expenses to skip for pagination (default: 0)"] = 0,
     include_extra_data: Annotated[
-        bool,
-        "Include all available expense data (default: False for summary only)"
+        bool, "Include all available expense data (default: False for summary only)"
     ] = False,
 ) -> Annotated[str, "JSON string containing expenses"]:
     """
@@ -416,20 +392,14 @@ async def create_bill(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter to bill"],
     issued_date: Annotated[
-        Optional[str],
-        "Bill issue date in YYYY-MM-DD format (optional, defaults to today)"
+        Optional[str], "Bill issue date in YYYY-MM-DD format (optional, defaults to today)"
     ] = None,
-    due_date: Annotated[
-        Optional[str],
-        "Bill due date in YYYY-MM-DD format (optional)"
-    ] = None,
+    due_date: Annotated[Optional[str], "Bill due date in YYYY-MM-DD format (optional)"] = None,
     include_unbilled_time: Annotated[
-        bool,
-        "Include all unbilled time entries (default: True)"
+        bool, "Include all unbilled time entries (default: True)"
     ] = True,
     include_unbilled_expenses: Annotated[
-        bool,
-        "Include all unbilled expenses (default: True)"
+        bool, "Include all unbilled expenses (default: True)"
     ] = True,
     note: Annotated[Optional[str], "Bill note or memo (optional)"] = None,
 ) -> Annotated[str, "JSON string containing the created bill details"]:
@@ -502,28 +472,14 @@ async def get_bills(
     context: ToolContext,
     matter_id: Annotated[Optional[int], "Filter by matter ID (optional)"] = None,
     state: Annotated[
-        Optional[str],
-        "Filter by bill state: 'draft', 'sent', 'paid', etc. (optional)"
+        Optional[str], "Filter by bill state: 'draft', 'sent', 'paid', etc. (optional)"
     ] = None,
-    date_from: Annotated[
-        Optional[str],
-        "Start date filter in YYYY-MM-DD format (optional)"
-    ] = None,
-    date_to: Annotated[
-        Optional[str],
-        "End date filter in YYYY-MM-DD format (optional)"
-    ] = None,
-    limit: Annotated[
-        Optional[int],
-        "Maximum number of bills to return (1-200, default: 50)"
-    ] = 50,
-    offset: Annotated[
-        Optional[int],
-        "Number of bills to skip for pagination (default: 0)"
-    ] = 0,
+    date_from: Annotated[Optional[str], "Start date filter in YYYY-MM-DD format (optional)"] = None,
+    date_to: Annotated[Optional[str], "End date filter in YYYY-MM-DD format (optional)"] = None,
+    limit: Annotated[Optional[int], "Maximum number of bills to return (1-200, default: 50)"] = 50,
+    offset: Annotated[Optional[int], "Number of bills to skip for pagination (default: 0)"] = 0,
     include_extra_data: Annotated[
-        bool,
-        "Include all available bill data (default: False for summary only)"
+        bool, "Include all available bill data (default: False for summary only)"
     ] = False,
 ) -> Annotated[str, "JSON string containing bills"]:
     """
@@ -571,3 +527,146 @@ async def get_bills(
             raise
         except Exception as e:
             raise ClioError(f"Failed to retrieve bills: {e!s}")
+
+
+# Unified Activity Management Tools (based on Klavis MCP documentation)
+
+
+@tool(requires_auth=Clio())
+async def list_activities(
+    context: ToolContext,
+    limit: Annotated[int, "Maximum number of activities to return (default: 50)"] = 50,
+    offset: Annotated[int, "Number of activities to skip for pagination (default: 0)"] = 0,
+    matter_id: Annotated[Optional[str], "Filter activities by matter ID"] = None,
+    user_id: Annotated[Optional[str], "Filter activities by user ID"] = None,
+    type: Annotated[Optional[str], "Filter by activity type: 'TimeEntry' or 'ExpenseEntry'"] = None,
+    date_from: Annotated[Optional[str], "Filter activities from date (YYYY-MM-DD)"] = None,
+    date_to: Annotated[Optional[str], "Filter activities to date (YYYY-MM-DD)"] = None,
+    billable: Annotated[Optional[bool], "Filter by billable status"] = None,
+    billed: Annotated[Optional[bool], "Filter by billed status"] = None,
+    fields: Annotated[Optional[str], "Comma-separated list of fields to include"] = None,
+) -> Annotated[str, "JSON response with list of activities and pagination info"]:
+    """List activities (time entries and expenses) in Clio with filtering.
+
+    Provides unified access to both time entries and expense entries with comprehensive
+    filtering options. Returns paginated results with activity details including
+    matter association, billing status, and financial information.
+    """
+    validate_positive_number(limit, "limit")
+    validate_positive_number(offset, "offset")
+
+    if matter_id:
+        validate_id(matter_id, "matter_id")
+    if user_id:
+        validate_id(user_id, "user_id")
+    if type and type not in ["TimeEntry", "ExpenseEntry"]:
+        raise ClioValidationError("type must be 'TimeEntry' or 'ExpenseEntry'")
+    if date_from:
+        validate_date_string(date_from, "date_from")
+    if date_to:
+        validate_date_string(date_to, "date_to")
+    if fields:
+        validate_optional_string(fields, "fields")
+
+    try:
+        async with ClioClient(context) as client:
+            # Build query parameters
+            params = build_search_params({
+                "limit": limit,
+                "offset": offset,
+                "matter_id": matter_id,
+                "user_id": user_id,
+                "type": type,
+                "date_from": date_from,
+                "date_to": date_to,
+                "billable": billable,
+                "billed": billed,
+                "fields": fields,
+            })
+
+            response = await client.get("/activities", params=params)
+            activities = extract_list_data(response, "activities", Activity)
+
+            return format_json_response({
+                "success": True,
+                "activities": activities,
+                "pagination": {
+                    "limit": limit,
+                    "offset": offset,
+                    "total": response.get("meta", {}).get("total_count"),
+                },
+            })
+
+    except ClioError as e:
+        raise ClioValidationError(f"Failed to list activities: {e}")
+
+
+@tool(requires_auth=Clio())
+async def get_activity(
+    context: ToolContext,
+    activity_id: Annotated[str, "The ID of the activity to retrieve"],
+    fields: Annotated[Optional[str], "Comma-separated list of fields to include"] = None,
+) -> Annotated[str, "JSON response with activity details"]:
+    """Get a specific activity by ID.
+
+    Returns detailed information about a time entry or expense entry including
+    matter association, billing status, financial details, and user information.
+    Works for both time entries and expense entries.
+    """
+    validate_id(activity_id, "activity_id")
+    if fields:
+        validate_optional_string(fields, "fields")
+
+    try:
+        async with ClioClient(context) as client:
+            params = build_search_params({"fields": fields})
+            response = await client.get(f"/activities/{activity_id}", params=params)
+            activity = extract_model_data(response, "activity", Activity)
+
+            return format_json_response({"success": True, "activity": activity})
+
+    except ClioError as e:
+        raise ClioValidationError(f"Failed to get activity {activity_id}: {e}")
+
+
+@tool(requires_auth=Clio())
+async def delete_activity(
+    context: ToolContext,
+    activity_id: Annotated[str, "The ID of the activity to delete"],
+) -> Annotated[str, "JSON response confirming activity deletion"]:
+    """Delete an activity.
+
+    Permanently removes a time entry or expense entry from Clio. This action cannot
+    be undone. If the activity has been billed, deletion may affect billing records.
+    Ensure proper authorization and validation before deletion.
+
+    Note: Deleting billed activities may require additional permissions and
+    could impact financial reporting.
+    """
+    validate_id(activity_id, "activity_id")
+
+    try:
+        async with ClioClient(context) as client:
+            # First get activity info for confirmation message
+            activity_response = await client.get(f"/activities/{activity_id}")
+            activity = extract_model_data(activity_response, "activity", Activity)
+            activity_type = activity.get("type", "Activity")
+            activity_desc = activity.get("description", f"{activity_type} {activity_id}")
+
+            # Check if activity is billed
+            if activity.get("billed"):
+                raise ClioValidationError(
+                    f"Cannot delete billed {activity_type.lower()}. "
+                    f"Remove from bill first or contact administrator."
+                )
+
+            # Delete the activity
+            await client.delete(f"/activities/{activity_id}")
+
+            return format_json_response({
+                "success": True,
+                "message": f"{activity_type} '{activity_desc}' (ID: {activity_id}) deleted successfully",
+            })
+
+    except ClioError as e:
+        raise ClioValidationError(f"Failed to delete activity {activity_id}: {e}")
