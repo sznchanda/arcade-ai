@@ -3,7 +3,7 @@
 from typing import Annotated, Optional
 
 from arcade_tdk import ToolContext, tool
-from arcade_tdk.auth import Clio
+from arcade_tdk.auth import OAuth2
 
 from ..client import ClioClient
 from ..exceptions import ClioError, ClioValidationError
@@ -23,7 +23,7 @@ from ..validation import (
 )
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def list_documents(
     context: ToolContext,
     limit: Annotated[int, "Maximum number of documents to return (default: 50)"] = 50,
@@ -43,7 +43,7 @@ async def list_documents(
     """
     validate_positive_number(limit, "limit")
     validate_positive_number(offset, "offset")
-    
+
     if matter_id:
         validate_id(matter_id, "matter_id")
     if contact_id:
@@ -68,10 +68,10 @@ async def list_documents(
                 "query": query,
                 "fields": fields,
             })
-            
+
             response = await client.get("/documents", params=params)
             documents = extract_list_data(response, "documents", Document)
-            
+
             return format_json_response({
                 "success": True,
                 "documents": documents,
@@ -81,12 +81,12 @@ async def list_documents(
                     "total": response.get("meta", {}).get("total_count"),
                 }
             })
-            
+
     except ClioError as e:
         raise ClioValidationError(f"Failed to list documents: {e}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def get_document(
     context: ToolContext,
     document_id: Annotated[str, "The ID of the document to retrieve"],
@@ -106,17 +106,17 @@ async def get_document(
             params = build_search_params({"fields": fields})
             response = await client.get(f"/documents/{document_id}", params=params)
             document = extract_model_data(response, "document", Document)
-            
+
             return format_json_response({
                 "success": True,
                 "document": document
             })
-            
+
     except ClioError as e:
         raise ClioValidationError(f"Failed to get document {document_id}: {e}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def create_document(
     context: ToolContext,
     document_data: Annotated[dict, "Document data including name, parent, and metadata"],
@@ -142,43 +142,43 @@ async def create_document(
     """
     if not isinstance(document_data, dict):
         raise ClioValidationError("document_data must be a dictionary")
-    
+
     # Validate required fields
     name = document_data.get("name")
     if not name:
         raise ClioValidationError("Document name is required")
     validate_required_string(name, "name")
-    
+
     # Validate optional fields
     if "description" in document_data:
         validate_optional_string(document_data["description"], "description")
-    if "matter_id" in document_data and document_data["matter_id"]:
+    if document_data.get("matter_id"):
         validate_id(str(document_data["matter_id"]), "matter_id")
-    if "contact_id" in document_data and document_data["contact_id"]:
+    if document_data.get("contact_id"):
         validate_id(str(document_data["contact_id"]), "contact_id")
-    if "parent_document_id" in document_data and document_data["parent_document_id"]:
+    if document_data.get("parent_document_id"):
         validate_id(str(document_data["parent_document_id"]), "parent_document_id")
 
     try:
         # Create request model for validation
         create_request = DocumentCreateRequest(**document_data)
-        
+
         async with ClioClient(context) as client:
             request_data = prepare_request_data(create_request.model_dump(exclude_none=True))
             response = await client.post("/documents", json={"document": request_data})
             document = extract_model_data(response, "document", Document)
-            
+
             return format_json_response({
                 "success": True,
                 "message": f"Document '{name}' created successfully",
                 "document": document
             })
-            
+
     except ClioError as e:
         raise ClioValidationError(f"Failed to create document: {e}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def update_document(
     context: ToolContext,
     document_id: Annotated[str, "The ID of the document to update"],
@@ -199,38 +199,38 @@ async def update_document(
     - tags: Document tags
     """
     validate_id(document_id, "document_id")
-    
+
     if not isinstance(document_data, dict):
         raise ClioValidationError("document_data must be a dictionary")
-    
+
     # Validate optional fields
     if "name" in document_data:
         validate_optional_string(document_data["name"], "name")
     if "description" in document_data:
         validate_optional_string(document_data["description"], "description")
-    if "parent_document_id" in document_data and document_data["parent_document_id"]:
+    if document_data.get("parent_document_id"):
         validate_id(str(document_data["parent_document_id"]), "parent_document_id")
 
     try:
         # Create request model for validation
         update_request = DocumentUpdateRequest(**document_data)
-        
+
         async with ClioClient(context) as client:
             request_data = prepare_request_data(update_request.model_dump(exclude_none=True))
             response = await client.patch(f"/documents/{document_id}", json={"document": request_data})
             document = extract_model_data(response, "document", Document)
-            
+
             return format_json_response({
                 "success": True,
                 "message": f"Document {document_id} updated successfully",
                 "document": document
             })
-            
+
     except ClioError as e:
         raise ClioValidationError(f"Failed to update document {document_id}: {e}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def delete_document(
     context: ToolContext,
     document_id: Annotated[str, "The ID of the document to delete"],
@@ -251,14 +251,15 @@ async def delete_document(
             doc_response = await client.get(f"/documents/{document_id}")
             document = extract_model_data(doc_response, "document", Document)
             doc_name = document.get("name", f"Document {document_id}")
-            
+
             # Delete the document
             await client.delete(f"/documents/{document_id}")
-            
+
             return format_json_response({
                 "success": True,
                 "message": f"Document '{doc_name}' (ID: {document_id}) deleted successfully"
             })
-            
+
     except ClioError as e:
         raise ClioValidationError(f"Failed to delete document {document_id}: {e}")
+

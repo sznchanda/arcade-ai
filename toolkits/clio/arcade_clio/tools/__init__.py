@@ -21,6 +21,14 @@ from .contacts import (
     search_contacts,
     update_contact,
 )
+from .custom_actions import (
+    create_custom_action,
+    delete_custom_action,
+    get_custom_action,
+    list_custom_actions,
+    test_custom_action_url,
+    update_custom_action,
+)
 from .documents import (
     create_document,
     delete_document,
@@ -39,6 +47,19 @@ from .matters import (
     remove_matter_participant,
     search_matters,
     update_matter,
+)
+from .timers import (
+    get_active_timer,
+    pause_timer,
+    start_timer,
+    stop_timer,
+)
+from .webhooks import (
+    create_webhook,
+    delete_webhook,
+    get_webhook,
+    list_webhooks,
+    update_webhook,
 )
 
 __all__ = [
@@ -78,4 +99,22 @@ __all__ = [
     "get_time_entries",
     "list_activities",
     "update_time_entry",
+    # Custom Actions Management
+    "create_custom_action",
+    "delete_custom_action",
+    "get_custom_action",
+    "list_custom_actions",
+    "test_custom_action_url",
+    "update_custom_action",
+    # Timer Management
+    "get_active_timer",
+    "pause_timer",
+    "start_timer",
+    "stop_timer",
+    # Webhook Management
+    "create_webhook",
+    "delete_webhook",
+    "get_webhook",
+    "list_webhooks",
+    "update_webhook",
 ]

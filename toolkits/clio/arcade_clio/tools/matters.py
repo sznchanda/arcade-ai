@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated, Optional
 
 from arcade_tdk import ToolContext, tool
-from arcade_tdk.auth import Clio
+from arcade_tdk.auth import OAuth2
 
 from ..client import ClioClient
 from ..exceptions import ClioError, ClioValidationError
@@ -22,11 +22,12 @@ from ..validation import (
     validate_limit_offset,
     validate_matter_status,
     validate_optional_string,
+    validate_positive_number,
     validate_required_string,
 )
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def list_matters(
     context: ToolContext,
     status: Annotated[
@@ -92,7 +93,7 @@ async def list_matters(
             raise ClioError(f"Failed to retrieve matters: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def get_matter(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter to retrieve"],
@@ -124,7 +125,7 @@ async def get_matter(
             raise ClioError(f"Failed to retrieve matter {matter_id}: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def create_matter(
     context: ToolContext,
     description: Annotated[str, "Description or name of the matter"],
@@ -204,7 +205,7 @@ async def create_matter(
             raise ClioError(f"Failed to create matter: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def update_matter(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter to update"],
@@ -288,7 +289,7 @@ async def update_matter(
             raise ClioError(f"Failed to update matter {matter_id}: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def close_matter(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter to close"],
@@ -337,7 +338,7 @@ async def close_matter(
             raise ClioError(f"Failed to close matter {matter_id}: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def get_matter_activities(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter"],
@@ -385,7 +386,7 @@ async def get_matter_activities(
             raise ClioError(f"Failed to retrieve activities for matter {matter_id}: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def add_matter_participant(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter"],
@@ -434,7 +435,7 @@ async def add_matter_participant(
             raise ClioError(f"Failed to add participant to matter {matter_id}: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def remove_matter_participant(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter"],
@@ -481,7 +482,7 @@ async def remove_matter_participant(
             raise ClioError(f"Failed to remove participant from matter {matter_id}: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def search_matters(
     context: ToolContext,
     query: Annotated[Optional[str], "Search query to filter matters by description"] = None,
@@ -577,7 +578,7 @@ async def search_matters(
         raise ClioValidationError(f"Failed to search matters: {e}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def delete_matter(
     context: ToolContext,
     matter_id: Annotated[str, "The ID of the matter to delete"],

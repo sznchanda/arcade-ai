@@ -215,6 +215,7 @@ def build_search_params(
     offset: Optional[int] = None,
     order_by: Optional[str] = None,
     order_direction: Optional[str] = None,
+    cursor_pagination: bool = False,
     **filters: Any,
 ) -> dict[str, Any]:
     """Build search parameters for API requests."""
@@ -224,11 +225,22 @@ def build_search_params(
         params["q"] = query
     if limit is not None:
         params["limit"] = min(limit, 200)  # Clio typically limits to 200
-    if offset is not None:
-        params["offset"] = offset
-    if order_by:
+
+    # Handle pagination: cursor vs offset
+    if cursor_pagination:
+        # For unlimited cursor pagination, offset is not allowed
+        # Must use order=id(asc) for cursor pagination
+        params["order"] = "id(asc)"
+        if offset is not None and offset > 0:
+            raise ValueError("Offset pagination cannot be used with cursor pagination")
+    else:
+        # Standard offset pagination (limited to 10,000 records)
+        if offset is not None:
+            params["offset"] = offset
+
+    if order_by and not cursor_pagination:
         params["order_by"] = order_by
-    if order_direction and order_direction.lower() in ["asc", "desc"]:
+    if order_direction and order_direction.lower() in ["asc", "desc"] and not cursor_pagination:
         params["order_direction"] = order_direction.lower()
 
     # Add additional filters

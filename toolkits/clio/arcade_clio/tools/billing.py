@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Annotated, Optional
 
 from arcade_tdk import ToolContext, tool
-from arcade_tdk.auth import Clio
+from arcade_tdk.auth import OAuth2
 
 from ..client import ClioClient
 from ..exceptions import ClioError, ClioValidationError
@@ -28,7 +28,7 @@ from ..validation import (
 )
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def create_time_entry(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter to log time for"],
@@ -112,7 +112,7 @@ async def create_time_entry(
             raise ClioError(f"Failed to create time entry: {e!s}", retry=True)
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def update_time_entry(
     context: ToolContext,
     time_entry_id: Annotated[int, "The ID of the time entry to update"],
@@ -180,7 +180,7 @@ async def update_time_entry(
             raise ClioError(f"Failed to update time entry {time_entry_id}: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def get_time_entries(
     context: ToolContext,
     matter_id: Annotated[Optional[int], "Filter by matter ID (optional)"] = None,
@@ -247,7 +247,7 @@ async def get_time_entries(
             raise ClioError(f"Failed to retrieve time entries: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def create_expense(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter to log expense for"],
@@ -320,7 +320,7 @@ async def create_expense(
             raise ClioError(f"Failed to create expense: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def get_expenses(
     context: ToolContext,
     matter_id: Annotated[Optional[int], "Filter by matter ID (optional)"] = None,
@@ -387,7 +387,7 @@ async def get_expenses(
             raise ClioError(f"Failed to retrieve expenses: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def create_bill(
     context: ToolContext,
     matter_id: Annotated[int, "The ID of the matter to bill"],
@@ -467,7 +467,7 @@ async def create_bill(
             raise ClioError(f"Failed to create bill: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def get_bills(
     context: ToolContext,
     matter_id: Annotated[Optional[int], "Filter by matter ID (optional)"] = None,
@@ -532,14 +532,14 @@ async def get_bills(
 # Unified Activity Management Tools (based on Klavis MCP documentation)
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def list_activities(
     context: ToolContext,
     limit: Annotated[int, "Maximum number of activities to return (default: 50)"] = 50,
     offset: Annotated[int, "Number of activities to skip for pagination (default: 0)"] = 0,
     matter_id: Annotated[Optional[str], "Filter activities by matter ID"] = None,
     user_id: Annotated[Optional[str], "Filter activities by user ID"] = None,
-    type: Annotated[Optional[str], "Filter by activity type: 'TimeEntry' or 'ExpenseEntry'"] = None,
+    activity_type: Annotated[Optional[str], "Filter by activity type: 'TimeEntry' or 'ExpenseEntry'"] = None,
     date_from: Annotated[Optional[str], "Filter activities from date (YYYY-MM-DD)"] = None,
     date_to: Annotated[Optional[str], "Filter activities to date (YYYY-MM-DD)"] = None,
     billable: Annotated[Optional[bool], "Filter by billable status"] = None,
@@ -559,8 +559,8 @@ async def list_activities(
         validate_id(matter_id, "matter_id")
     if user_id:
         validate_id(user_id, "user_id")
-    if type and type not in ["TimeEntry", "ExpenseEntry"]:
-        raise ClioValidationError("type must be 'TimeEntry' or 'ExpenseEntry'")
+    if activity_type and activity_type not in ["TimeEntry", "ExpenseEntry"]:
+        raise ClioValidationError("activity_type must be 'TimeEntry' or 'ExpenseEntry'")
     if date_from:
         validate_date_string(date_from, "date_from")
     if date_to:
@@ -576,7 +576,7 @@ async def list_activities(
                 "offset": offset,
                 "matter_id": matter_id,
                 "user_id": user_id,
-                "type": type,
+                "type": activity_type,
                 "date_from": date_from,
                 "date_to": date_to,
                 "billable": billable,
@@ -601,7 +601,7 @@ async def list_activities(
         raise ClioValidationError(f"Failed to list activities: {e}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def get_activity(
     context: ToolContext,
     activity_id: Annotated[str, "The ID of the activity to retrieve"],
@@ -629,7 +629,7 @@ async def get_activity(
         raise ClioValidationError(f"Failed to get activity {activity_id}: {e}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def delete_activity(
     context: ToolContext,
     activity_id: Annotated[str, "The ID of the activity to delete"],

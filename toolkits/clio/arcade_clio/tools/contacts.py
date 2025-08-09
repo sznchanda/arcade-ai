@@ -3,7 +3,7 @@
 from typing import Annotated, Optional
 
 from arcade_tdk import ToolContext, tool
-from arcade_tdk.auth import Clio
+from arcade_tdk.auth import OAuth2
 
 from ..client import ClioClient
 from ..exceptions import ClioError, ClioValidationError
@@ -26,7 +26,7 @@ from ..validation import (
 )
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def search_contacts(
     context: ToolContext,
     query: Annotated[str, "Search query for contacts (name, email, phone, company)"],
@@ -37,6 +37,12 @@ async def search_contacts(
         Optional[int], "Maximum number of contacts to return (1-200, default: 50)"
     ] = 50,
     offset: Annotated[Optional[int], "Number of contacts to skip for pagination (default: 0)"] = 0,
+    fields: Annotated[
+        Optional[str], "Comma-separated list of fields to include in response (e.g. 'id,name,email')"
+    ] = None,
+    cursor_pagination: Annotated[
+        bool, "Use unlimited cursor pagination instead of offset pagination (default: False)"
+    ] = False,
     include_extra_data: Annotated[
         bool, "Include all available contact data (default: False for summary only)"
     ] = False,
@@ -64,6 +70,8 @@ async def search_contacts(
             limit=limit,
             offset=offset,
             type=contact_type,
+            fields=fields,
+            cursor_pagination=cursor_pagination,
         )
 
         # Search contacts
@@ -73,10 +81,13 @@ async def search_contacts(
         return format_json_response(contacts_data, include_extra_data=include_extra_data)
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def get_contact(
     context: ToolContext,
     contact_id: Annotated[int, "The ID of the contact to retrieve"],
+    fields: Annotated[
+        Optional[str], "Comma-separated list of fields to include in response (e.g. 'id,name,email')"
+    ] = None,
     include_extra_data: Annotated[
         bool, "Include all available contact data (default: False for summary only)"
     ] = False,
@@ -94,7 +105,10 @@ async def get_contact(
             # Validate input
             contact_id = validate_id(contact_id, "Contact ID")
 
-            response = await client.get_contact(contact_id)
+            # Build parameters with fields support
+            params = build_search_params(fields=fields) if fields else None
+
+            response = await client.get_contact(contact_id, params=params)
             contact_data = extract_model_data(response, Contact)
 
             return format_json_response(contact_data, include_extra_data=include_extra_data)
@@ -107,7 +121,7 @@ async def get_contact(
             raise ClioError(f"Failed to retrieve contact {contact_id}: {e!s}", retry=True)
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def create_contact(
     context: ToolContext,
     contact_type: Annotated[str, "Contact type: 'Person' or 'Company'"],
@@ -191,7 +205,7 @@ async def create_contact(
             raise ClioError(f"Failed to create contact: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def update_contact(
     context: ToolContext,
     contact_id: Annotated[int, "The ID of the contact to update"],
@@ -261,7 +275,7 @@ async def update_contact(
             raise ClioError(f"Failed to update contact {contact_id}: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def list_contact_activities(
     context: ToolContext,
     contact_id: Annotated[int, "The ID of the contact"],
@@ -316,7 +330,7 @@ async def list_contact_activities(
             raise ClioError(f"Failed to retrieve activities for contact {contact_id}: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def get_contact_relationships(
     context: ToolContext,
     contact_id: Annotated[int, "The ID of the contact"],
@@ -383,7 +397,7 @@ async def get_contact_relationships(
             raise ClioError(f"Failed to retrieve relationships for contact {contact_id}: {e!s}")
 
 
-@tool(requires_auth=Clio())
+@tool(requires_auth=OAuth2(id="clio"))
 async def delete_contact(
     context: ToolContext,
     contact_id: Annotated[str, "The ID of the contact to delete"],

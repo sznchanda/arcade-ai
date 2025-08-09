@@ -214,9 +214,9 @@ class ClioClient:
 
         return await self.get("contacts", params=params)
 
-    async def get_contact(self, contact_id: int) -> dict[str, Any]:
+    async def get_contact(self, contact_id: int, *, params: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """Get a specific contact by ID."""
-        return await self.get(f"contacts/{contact_id}")
+        return await self.get(f"contacts/{contact_id}", params=params)
 
     async def get_matters(
         self, *, limit: Optional[int] = None, offset: Optional[int] = None, **filters: Any
