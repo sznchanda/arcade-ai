@@ -7,7 +7,8 @@ class ClioError(ToolExecutionError):
     """Base exception for Clio-related errors."""
 
     def __init__(self, message: str, *, retry: bool = False) -> None:
-        super().__init__(message=message, developer_message=message, retry=retry)
+        super().__init__(message=message, developer_message=message)
+        self.retry = retry
 
 
 class ClioAuthenticationError(ClioError):
@@ -57,3 +58,10 @@ class ClioTimeoutError(ClioError):
 
     def __init__(self, message: str = "Request timeout") -> None:
         super().__init__(message=message, retry=True)
+
+
+class ClioPreconditionError(ClioError):
+    """Raised when ETag conditional request fails (412 Precondition Failed)."""
+
+    def __init__(self, message: str = "Precondition failed - resource was modified by another request") -> None:
+        super().__init__(message=message)

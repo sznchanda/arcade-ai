@@ -10,6 +10,7 @@ from .exceptions import (
     ClioAuthenticationError,
     ClioError,
     ClioPermissionError,
+    ClioPreconditionError,
     ClioRateLimitError,
     ClioResourceNotFoundError,
     ClioServerError,
@@ -49,17 +50,30 @@ class ClioClient:
         if self._client:
             await self._client.aclose()
 
-    def _get_headers(self) -> dict[str, str]:
-        """Get HTTP headers for API requests."""
+    def _get_headers(self, *, if_none_match: Optional[str] = None, if_match: Optional[str] = None) -> dict[str, str]:
+        """Get HTTP headers for API requests.
+        
+        Args:
+            if_none_match: ETag value for conditional GET (304 Not Modified)
+            if_match: ETag value for conditional PUT/PATCH/DELETE (412 Precondition Failed)
+        """
         token = self.context.authorization.token if self.context.authorization else ""
 
-        return {
+        headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "Accept": "application/json",
             "X-API-VERSION": "4.0.0",  # Critical for Clio API v4
             "User-Agent": "Arcade-Clio-Toolkit/1.0",
         }
+        
+        # Add conditional headers for ETag support
+        if if_none_match:
+            headers["If-None-Match"] = if_none_match
+        if if_match:
+            headers["If-Match"] = if_match
+            
+        return headers
 
     def _handle_error_response(self, response: httpx.Response) -> None:
         """Handle HTTP error responses by raising appropriate exceptions."""
@@ -69,6 +83,8 @@ class ClioClient:
             raise ClioPermissionError("Insufficient permissions for this operation")
         elif response.status_code == 404:
             raise ClioResourceNotFoundError("Requested resource not found")
+        elif response.status_code == 412:
+            raise ClioPreconditionError("Precondition failed - resource was modified by another request")
         elif response.status_code == 422:
             try:
                 error_data = response.json()
@@ -90,6 +106,8 @@ class ClioClient:
         *,
         params: Optional[dict[str, Any]] = None,
         json_data: Optional[dict[str, Any]] = None,
+        if_none_match: Optional[str] = None,
+        if_match: Optional[str] = None,
         retry_count: int = 0,
     ) -> httpx.Response:
         """Make an HTTP request with error handling and retries."""
@@ -97,14 +115,26 @@ class ClioClient:
             raise ClioError("Client not initialized. Use as async context manager.")
 
         try:
+            # Add conditional headers if provided
+            additional_headers = {}
+            if if_none_match:
+                additional_headers["If-None-Match"] = if_none_match
+            if if_match:
+                additional_headers["If-Match"] = if_match
+
             response = await self._client.request(
                 method=method,
                 url=endpoint,
                 params=params,
                 json=json_data,
+                headers=additional_headers,
             )
 
             if response.is_success:
+                return response
+            
+            # Handle 304 Not Modified as success for ETag conditional requests
+            if response.status_code == 304:
                 return response
 
             # Handle rate limiting with retry
@@ -115,6 +145,8 @@ class ClioClient:
                     endpoint,
                     params=params,
                     json_data=json_data,
+                    if_none_match=if_none_match,
+                    if_match=if_match,
                     retry_count=retry_count + 1,
                 )
 
@@ -126,6 +158,8 @@ class ClioClient:
                     endpoint,
                     params=params,
                     json_data=json_data,
+                    if_none_match=if_none_match,
+                    if_match=if_match,
                     retry_count=retry_count + 1,
                 )
 
@@ -140,6 +174,8 @@ class ClioClient:
                     endpoint,
                     params=params,
                     json_data=json_data,
+                    if_none_match=if_none_match,
+                    if_match=if_match,
                     retry_count=retry_count + 1,
                 )
             raise ClioTimeoutError(f"Request timeout: {e!s}")
@@ -152,6 +188,8 @@ class ClioClient:
                     endpoint,
                     params=params,
                     json_data=json_data,
+                    if_none_match=if_none_match,
+                    if_match=if_match,
                     retry_count=retry_count + 1,
                 )
             raise ClioError(f"Network error: {e!s}")
@@ -160,11 +198,22 @@ class ClioClient:
         raise ClioError("Unexpected response")
 
     async def get(
-        self, endpoint: str, *, params: Optional[dict[str, Any]] = None
+        self, endpoint: str, *, params: Optional[dict[str, Any]] = None, if_none_match: Optional[str] = None
     ) -> dict[str, Any]:
-        """Make a GET request."""
-        response = await self._make_request("GET", endpoint, params=params)
-        return response.json()
+        """Make a GET request with optional ETag support."""
+        response = await self._make_request("GET", endpoint, params=params, if_none_match=if_none_match)
+        
+        # Handle 304 Not Modified
+        if response.status_code == 304:
+            return {"status": "not_modified", "etag": response.headers.get("etag")}
+            
+        result = response.json()
+        
+        # Include ETag in response if available
+        if "etag" in response.headers:
+            result["_etag"] = response.headers["etag"]
+            
+        return result
 
     async def post(
         self,
@@ -183,21 +232,33 @@ class ClioClient:
         *,
         params: Optional[dict[str, Any]] = None,
         json_data: Optional[dict[str, Any]] = None,
+        if_match: Optional[str] = None,
     ) -> dict[str, Any]:
-        """Make a PATCH request."""
-        response = await self._make_request("PATCH", endpoint, params=params, json_data=json_data)
-        return response.json()
+        """Make a PATCH request with optional conditional update support."""
+        response = await self._make_request("PATCH", endpoint, params=params, json_data=json_data, if_match=if_match)
+        
+        result = response.json()
+        
+        # Include ETag in response if available
+        if "etag" in response.headers:
+            result["_etag"] = response.headers["etag"]
+            
+        return result
 
     async def delete(
-        self, endpoint: str, *, params: Optional[dict[str, Any]] = None
+        self, endpoint: str, *, params: Optional[dict[str, Any]] = None, if_match: Optional[str] = None
     ) -> dict[str, Any]:
-        """Make a DELETE request."""
-        response = await self._make_request("DELETE", endpoint, params=params)
+        """Make a DELETE request with optional conditional delete support."""
+        response = await self._make_request("DELETE", endpoint, params=params, if_match=if_match)
         try:
-            return response.json()
+            result = response.json()
+            # Include ETag in response if available
+            if "etag" in response.headers:
+                result["_etag"] = response.headers["etag"]
+            return result
         except Exception:
             # Some DELETE requests return empty responses
-            return {}
+            return {"status": "deleted"}
 
     # Convenience methods for common endpoints
 

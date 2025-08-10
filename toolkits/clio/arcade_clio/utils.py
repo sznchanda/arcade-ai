@@ -130,7 +130,7 @@ def extract_list_data(response_data: dict[str, Any], item_key: str) -> list[dict
 def format_json_response(data: Any, *, include_extra_data: bool = False) -> str:
     """Format response data as JSON string."""
     if not include_extra_data and isinstance(data, dict):
-        # Filter to important fields only
+        # Filter to important fields only (always preserve ETag and status info)
         important_fields = {
             "id",
             "name",
@@ -146,6 +146,8 @@ def format_json_response(data: Any, *, include_extra_data: bool = False) -> str:
             "created_at",
             "updated_at",
             "type",
+            "_etag",  # Always preserve ETag information
+            "pagination",  # Preserve pagination info
         }
 
         if isinstance(data, list):
@@ -158,7 +160,12 @@ def format_json_response(data: Any, *, include_extra_data: bool = False) -> str:
                     filtered_data.append(item)
             data = filtered_data
         elif isinstance(data, dict):
-            data = {k: v for k, v in data.items() if k in important_fields}
+            # Always preserve special status responses like 'not_modified'
+            if data.get("status") in ["not_modified", "deleted"]:
+                # Don't filter special status responses
+                pass
+            else:
+                data = {k: v for k, v in data.items() if k in important_fields}
 
     # Custom JSON encoder for datetime and Decimal
     def json_encoder(obj: Any) -> str:
