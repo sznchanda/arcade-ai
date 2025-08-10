@@ -119,45 +119,51 @@ async def get_document(
 @tool(requires_auth=OAuth2(id="clio"))
 async def create_document(
     context: ToolContext,
-    document_data: Annotated[dict, "Document data including name, parent, and metadata"],
+    name: Annotated[str, "Document name (required)"],
+    description: Annotated[str | None, "Document description"] = None,
+    matter_id: Annotated[int | None, "Associate with specific matter ID"] = None,
+    contact_id: Annotated[int | None, "Associate with specific contact ID"] = None,
+    parent_document_id: Annotated[int | None, "Place in document folder (parent document ID)"] = None,
+    document_category_id: Annotated[int | None, "Assign document category ID"] = None,
+    is_folder: Annotated[bool, "Create as folder"] = False,
+    public: Annotated[bool, "Make publicly accessible"] = False,
 ) -> Annotated[str, "JSON response with created document details"]:
     """Create a new document in Clio.
     
     Creates a new document entry with specified name, description, and relationships.
     Can be associated with matters, contacts, or organized within document folders.
     Document categories can be assigned for better organization.
-    
-    Required fields:
-    - name: Document name
-    
-    Optional fields:
-    - description: Document description
-    - matter_id: Associate with specific matter
-    - contact_id: Associate with specific contact
-    - parent_document_id: Place in document folder
-    - document_category_id: Assign document category
-    - is_folder: Create as folder (default: False)
-    - public: Make publicly accessible (default: False)
-    - tags: List of tags for organization
     """
-    if not isinstance(document_data, dict):
-        raise ClioValidationError("document_data must be a dictionary")
+    # Build document data from parameters
+    document_data = {
+        "name": name,
+        "is_folder": is_folder,
+        "public": public,
+    }
+    
+    if description is not None:
+        document_data["description"] = description
+    if matter_id is not None:
+        document_data["matter_id"] = matter_id
+    if contact_id is not None:
+        document_data["contact_id"] = contact_id
+    if parent_document_id is not None:
+        document_data["parent_document_id"] = parent_document_id
+    if document_category_id is not None:
+        document_data["document_category_id"] = document_category_id
 
     # Validate required fields
-    name = document_data.get("name")
-    if not name:
-        raise ClioValidationError("Document name is required")
     validate_required_string(name, "name")
 
     # Validate optional fields
-    if "description" in document_data:
-        validate_optional_string(document_data["description"], "description")
-    if document_data.get("matter_id"):
-        validate_id(str(document_data["matter_id"]), "matter_id")
-    if document_data.get("contact_id"):
-        validate_id(str(document_data["contact_id"]), "contact_id")
-    if document_data.get("parent_document_id"):
-        validate_id(str(document_data["parent_document_id"]), "parent_document_id")
+    if description is not None:
+        validate_optional_string(description, "description")
+    if matter_id is not None:
+        validate_id(matter_id, "matter_id")
+    if contact_id is not None:
+        validate_id(contact_id, "contact_id")
+    if parent_document_id is not None:
+        validate_id(parent_document_id, "parent_document_id")
 
     try:
         # Create request model for validation
@@ -182,34 +188,41 @@ async def create_document(
 async def update_document(
     context: ToolContext,
     document_id: Annotated[str, "The ID of the document to update"],
-    document_data: Annotated[dict, "Updated document data"],
+    name: Annotated[str | None, "Document name"] = None,
+    description: Annotated[str | None, "Document description"] = None,
+    document_category_id: Annotated[int | None, "Document category ID"] = None,
+    parent_document_id: Annotated[int | None, "Parent folder (parent document ID)"] = None,
+    public: Annotated[bool | None, "Make publicly accessible"] = None,
 ) -> Annotated[str, "JSON response with updated document details"]:
     """Update an existing document.
     
     Updates document metadata including name, description, category, parent folder,
     public access settings, and tags. Cannot modify file content - use document
     versions for file updates.
-    
-    Updatable fields:
-    - name: Document name
-    - description: Document description
-    - document_category_id: Document category
-    - parent_document_id: Parent folder
-    - public: Public access setting
-    - tags: Document tags
     """
     validate_id(document_id, "document_id")
 
-    if not isinstance(document_data, dict):
-        raise ClioValidationError("document_data must be a dictionary")
+    # Build document data from parameters
+    document_data = {}
+    
+    if name is not None:
+        document_data["name"] = name
+    if description is not None:
+        document_data["description"] = description
+    if document_category_id is not None:
+        document_data["document_category_id"] = document_category_id
+    if parent_document_id is not None:
+        document_data["parent_document_id"] = parent_document_id
+    if public is not None:
+        document_data["public"] = public
 
     # Validate optional fields
-    if "name" in document_data:
-        validate_optional_string(document_data["name"], "name")
-    if "description" in document_data:
-        validate_optional_string(document_data["description"], "description")
-    if document_data.get("parent_document_id"):
-        validate_id(str(document_data["parent_document_id"]), "parent_document_id")
+    if name is not None:
+        validate_optional_string(name, "name")
+    if description is not None:
+        validate_optional_string(description, "description")
+    if parent_document_id is not None:
+        validate_id(parent_document_id, "parent_document_id")
 
     try:
         # Create request model for validation

@@ -16,6 +16,7 @@ def eval_clio_webhooks() -> EvalSuite:
     # Create evaluation suite
     suite = EvalSuite(
         name="Clio Webhook Management",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio webhook tools to help users set up real-time notifications.",
         catalog=catalog,
     )
 
@@ -172,6 +173,7 @@ def eval_clio_webhook_scenarios() -> EvalSuite:
 
     suite = EvalSuite(
         name="Clio Webhook Integration Scenarios",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio webhook tools to help users set up real-time notifications.",
         catalog=catalog,
     )
 

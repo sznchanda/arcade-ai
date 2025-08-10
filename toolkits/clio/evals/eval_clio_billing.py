@@ -16,6 +16,7 @@ def eval_clio_billing() -> EvalSuite:
     # Create evaluation suite
     suite = EvalSuite(
         name="Clio Billing and Time Tracking",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio billing and time tracking tools to help users with their requests.",
         catalog=catalog,
     )
 
@@ -284,6 +285,7 @@ def eval_clio_billing_edge_cases() -> EvalSuite:
 
     suite = EvalSuite(
         name="Clio Billing Edge Cases",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio billing and time tracking tools to help users with their requests.",
         catalog=catalog,
     )
 

@@ -54,6 +54,9 @@ make clean-build
 
 # Bump version (patch)
 make bump-version
+
+# View available make targets
+make help
 ```
 
 ### Linting and Type Checking
@@ -298,10 +301,11 @@ uv run arcade evals run evals/ --model gpt-4o
 - Include Clio error details when available
 
 ### Linting Configuration
-- Ruff rules: E, F, I, N, UP, RUF (ignore E501 for line length)
+- Ruff rules: E, F, I, N, UP, RUF (ignore E501 for line length)  
 - Line length: 100 characters
 - Target Python: 3.10+
 - Format with `ruff format`
+- MyPy: Strict mode with `disallow_untyped_defs = true`
 
 ## Common Development Tasks
 

@@ -1,0 +1,10 @@
+[[worker]]
+[worker.config]
+id = "clio-toolkit"
+enabled = true
+timeout = 30
+retries = 3
+secret = "clio-worker-secret-2024"
+
+[worker.local_source]
+packages = ["."]

@@ -14,6 +14,7 @@ def eval_clio_documents() -> EvalSuite:
     
     suite = EvalSuite(
         name="Clio Document Management",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio document management tools to help users with their requests.",
         catalog=catalog,
     )
 
@@ -211,6 +212,7 @@ def eval_clio_document_edge_cases() -> EvalSuite:
     
     suite = EvalSuite(
         name="Clio Document Management Edge Cases",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio document management tools to help users with their requests.",
         catalog=catalog,
     )
 

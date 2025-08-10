@@ -16,6 +16,7 @@ def eval_clio_custom_actions() -> EvalSuite:
     # Create evaluation suite
     suite = EvalSuite(
         name="Clio Custom Actions Management",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio custom actions tools to help users integrate external applications into their Clio UI.",
         catalog=catalog,
     )
 
@@ -210,6 +211,7 @@ def eval_clio_custom_action_workflows() -> EvalSuite:
 
     suite = EvalSuite(
         name="Clio Custom Action Workflows",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio custom actions tools to help users integrate external applications into their Clio UI.",
         catalog=catalog,
     )
 

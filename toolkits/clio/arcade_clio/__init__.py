@@ -55,6 +55,16 @@ from .tools import (
     update_matter,
     update_time_entry,
     update_webhook,
+    # Activity tools
+    delete_activity,
+    get_activity,
+    list_activities,
+    # Document tools
+    create_document,
+    delete_document,
+    get_document,
+    list_documents,
+    update_document,
 )
 
 __version__ = "0.1.0"
@@ -108,4 +118,14 @@ __all__ = [
     "get_webhook",
     "list_webhooks",
     "update_webhook",
+    # Activity tools
+    "delete_activity",
+    "get_activity",
+    "list_activities",
+    # Document tools
+    "create_document",
+    "delete_document",
+    "get_document",
+    "list_documents",
+    "update_document",
 ]

@@ -14,6 +14,7 @@ def eval_clio_contacts() -> EvalSuite:
 
     suite = EvalSuite(
         name="Clio Contact Management",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio contact management tools to help users with their requests.",
         catalog=catalog,
     )
 
@@ -268,6 +269,7 @@ def eval_clio_contact_edge_cases() -> EvalSuite:
     
     suite = EvalSuite(
         name="Clio Contact Management Edge Cases",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio contact management tools to help users with their requests.",
         catalog=catalog,
     )
 

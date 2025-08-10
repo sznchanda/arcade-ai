@@ -14,6 +14,7 @@ def eval_clio_activities() -> EvalSuite:
     
     suite = EvalSuite(
         name="Clio Activity Management",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio activity management tools to help users with their requests.",
         catalog=catalog,
     )
 
@@ -206,6 +207,7 @@ def eval_clio_activity_edge_cases() -> EvalSuite:
     
     suite = EvalSuite(
         name="Clio Activity Management Edge Cases",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio activity management tools to help users with their requests.",
         catalog=catalog,
     )
 

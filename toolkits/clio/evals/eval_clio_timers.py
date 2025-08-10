@@ -16,6 +16,7 @@ def eval_clio_timers() -> EvalSuite:
     # Create evaluation suite
     suite = EvalSuite(
         name="Clio Timer Management",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio timer tools to help users track their time.",
         catalog=catalog,
     )
 
@@ -168,6 +169,7 @@ def eval_clio_timer_workflows() -> EvalSuite:
 
     suite = EvalSuite(
         name="Clio Timer Workflows",
+        system_message="You are an assistant helping with legal practice management using Clio tools. Use the available Clio timer tools to help users track their time.",
         catalog=catalog,
     )
 
